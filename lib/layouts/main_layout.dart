@@ -4,8 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/navigation_provider.dart';
 import '../screens/home_screen.dart';
 
+/// @title KosplyMainLayout
+/// @notice Nested home shell with the bottom-navigation destinations.
+/// @dev Uses Riverpod ({navigationIndexProvider}) for the selected tab. Not
+/// the app entry point while the auth flow is still under construction;
+/// reachable through the '/home' route.
 class KosplyMainLayout extends ConsumerWidget {
+  /// @notice Creates the main layout shell.
+  /// @param key Optional widget key.
+  /// @return A new {KosplyMainLayout} instance.
   const KosplyMainLayout({super.key});
+
+  /// @dev Named route for this shell.
+  static const routeName = '/home';
+
+  /// @notice Pushes this shell onto the current route stack.
+  /// @param context The build context.
+  /// @return Future completing when the shell is popped.
+  static Future<void> push(BuildContext context) {
+    return Navigator.of(context).pushNamed(routeName);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
