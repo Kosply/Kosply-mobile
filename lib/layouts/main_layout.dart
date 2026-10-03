@@ -1,20 +1,93 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/navigation_provider.dart';
 import '../screens/home_screen.dart';
 
-class KosplyMainLayout extends StatefulWidget {
+class KosplyMainLayout extends ConsumerWidget {
   const KosplyMainLayout({super.key});
 
   @override
-  State<KosplyMainLayout> createState() => _KosplyMainLayoutState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Read the current index
+    final currentPageIndex = ref.watch(navigationIndexProvider);
 
-class _KosplyMainLayoutState extends State<KosplyMainLayout> {
-  int currentPageIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            // 1. Brand App Icon (Blue rounded square with 'X')
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5), // Your app purple/blue
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text(
+                  'X',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // 2. Location Pill Container
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9), // Light grayish-blue background
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(
+                    Icons.location_on,
+                    color: Color(0xFFEF4444),
+                    size: 16,
+                  ), // Red pin icon
+                  SizedBox(width: 4),
+                  Text(
+                    'ITB Ganesha, Ba...',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF1E293B),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Color(0xFF64748B),
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // 3. Circular Profile Avatar on the right
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: CircleAvatar(
+              radius: 16,
+              backgroundImage: AssetImage(
+                'assets/images/profile_placeholder.png',
+              ), // Or NetworkImage / Icon
+            ),
+          ),
+        ],
+      ),
       body: <Widget>[
         // Page 0: Home
         const HomeScreen(),
@@ -29,13 +102,9 @@ class _KosplyMainLayoutState extends State<KosplyMainLayout> {
       ][currentPageIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white, // Match your background color
+          color: Colors.white,
           border: Border(
-            top: BorderSide(
-              color: Colors.grey.shade300, // Color of your tiny stroke
-              width:
-                  1.0, // Thickness of the stroke (1 pixel is nice and subtle)
-            ),
+            top: BorderSide(color: Colors.grey.shade300, width: 1.0),
           ),
         ),
         child: NavigationBarTheme(
@@ -61,13 +130,12 @@ class _KosplyMainLayoutState extends State<KosplyMainLayout> {
           ),
           child: NavigationBar(
             backgroundColor: Colors.white,
-            indicatorColor: Color(0x00000000),
-            onDestinationSelected: (int index) {
-              setState(() {
-                currentPageIndex = index;
-              });
-            },
+            indicatorColor: const Color(0x00000000),
             selectedIndex: currentPageIndex,
+            onDestinationSelected: (int index) {
+              // Update state using Riverpod notifier instead of setState
+              ref.read(navigationIndexProvider.notifier).setIndex(index);
+            },
             destinations: const <Widget>[
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),

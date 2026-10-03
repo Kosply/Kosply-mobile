@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/product_card.dart';
+import '../widgets/searchbar.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -9,7 +10,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Kosply Home'), elevation: 0),
       body: const SingleChildScrollView(
         child: Padding(
           padding: EdgeInsets.all(16.0),
@@ -17,6 +17,8 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Put your search bar, banners, and product grid here!
+              KosplySearchbar(),
+              SizedBox(height: 30),
               Row(
                 children: [
                   Expanded(
