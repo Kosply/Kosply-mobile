@@ -1,11 +1,37 @@
-/// @title KosplyWordmark
-/// @notice The Kosply wordmark image used in app bars and headers.
-/// @dev Single place that owns the logo asset path and its default size, so
-/// screens do not repeat the asset string.
+/// @title Kosply brand marks
+/// @notice Splash icon and wordmark assets used across the app.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/widgets.dart';
+
+/// @title KosplyMark
+/// @notice The square splash logo (`logo.png`).
+class KosplyMark extends StatelessWidget {
+  /// @notice Creates the splash mark.
+  /// @param size Box size in logical pixels.
+  /// @return A new {KosplyMark} instance.
+  const KosplyMark({this.size = 36, super.key});
+
+  /// @dev Asset path of the splash logo.
+  static const String assetPath = 'assets/images/logo.png';
+
+  /// @dev Box size in logical pixels.
+  final double size;
+
+  /// @notice Builds the splash logo.
+  /// @param context The build context.
+  /// @return The logo image.
+  @override
+  Widget build(BuildContext context) {
+    return Image(
+      image: const AssetImage(assetPath),
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+    );
+  }
+}
 
 /// @title KosplyWordmark
 /// @notice Reusable Kosply logo image.
