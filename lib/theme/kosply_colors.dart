@@ -16,6 +16,9 @@ class KosplyColors {
   /// @dev Brand purple used for primary actions and links.
   static const Color primary = Color(0xFF4F46E5);
 
+  /// @dev Online / last-active indicator green.
+  static const Color active = Color(0xFF16A34A);
+
   /// @dev Muted text colour for helper and secondary lines.
   static const Color textSecondary = Color(0x8A000000);
 
@@ -37,4 +40,51 @@ class KosplyColors {
 
   /// @dev Error message colour.
   static const Color error = Colors.red;
+
+  /// @dev Dark scaffold background.
+  static const Color darkBackground = Color(0xFF121212);
+
+  /// @dev Dark card / surface colour.
+  static const Color darkSurface = Color(0xFF1C1B1F);
+
+  /// @dev Dark primary text.
+  static const Color darkTextPrimary = Color(0xFFE6E1E5);
+
+  /// @dev Dark secondary text.
+  static const Color darkTextSecondary = Color(0x99FFFFFF);
+
+  /// @dev Dark outline / divider.
+  static const Color darkOutline = Color(0xFF49454F);
+
+  /// @notice Whether the current theme is dark.
+  /// @param context The build context.
+  /// @return True when {Theme.brightness} is dark.
+  static bool isDark(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark;
+  }
+
+  /// @notice Page background for the active appearance.
+  static Color backgroundOf(BuildContext context) {
+    return isDark(context) ? darkBackground : card;
+  }
+
+  /// @notice Card surface for the active appearance.
+  static Color surfaceOf(BuildContext context) {
+    return isDark(context) ? darkSurface : card;
+  }
+
+  /// @notice Strong text for the active appearance.
+  static Color textPrimaryOf(BuildContext context) {
+    return isDark(context) ? darkTextPrimary : textPrimary;
+  }
+
+  /// @notice Secondary text for the active appearance.
+  static Color textSecondaryOf(BuildContext context) {
+    return isDark(context) ? darkTextSecondary : textSecondary;
+  }
+
+  /// @notice Outline for the active appearance.
+  static Color outlineOf(BuildContext context) {
+    return isDark(context) ? darkOutline : outline;
+  }
 }

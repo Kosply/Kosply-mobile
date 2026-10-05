@@ -64,12 +64,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Image(
-              image: AssetImage('assets/images/logo.png'),
-              width: 96,
-              height: 96,
-              fit: BoxFit.contain,
-            ),
+            KosplyMark(size: 96),
             SizedBox(height: 10),
             KosplyWordmark(width: 160),
           ],
