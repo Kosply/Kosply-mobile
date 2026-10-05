@@ -171,7 +171,7 @@ class FormValidators {
   /// @param length Number of digits in the code.
   /// @return A validator for the verification code step.
   static String? Function(String) code({int length = 4}) {
-    final pattern = RegExp(r'^\d{' + length.toString() + r'\}$');
+    final pattern = RegExp('^\\d{$length}\$');
     return (value) => pattern.hasMatch(value.trim())
         ? null
         : 'That code is not $length digits yet. Check and try again.';
