@@ -1,19 +1,25 @@
 /// @title SplashScreen
-/// @notice Brand splash screen with automatic navigation to Register.
+/// @notice Brand splash screen with automatic navigation.
 /// @dev Static centered layout (icon, 10px gap, wordmark) plus a 2-second
-/// timer that routes to {RegisterScreen} via named route.
+/// timer that routes by session: home when signed in, the shortened Google
+/// form when onboarding is pending, and Register otherwise.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../layouts/main_layout.dart';
+import '../../../models/auth/auth_session.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/brand/kosply_wordmark.dart';
+import '../register/register_email_screen.dart';
 import '../register/register_screen.dart';
 
 /// @title SplashScreen
 /// @notice Splash screen widget with delayed navigation.
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   /// @notice Creates the splash screen.
   /// @param key Optional widget key.
   /// @return A new {SplashScreen} instance.
@@ -33,13 +39,14 @@ class SplashScreen extends StatefulWidget {
   /// @notice Creates the mutable state.
   /// @return The {_SplashScreenState} instance.
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
 /// @title _SplashScreenState
 /// @notice Mutable state for {SplashScreen}.
-/// @dev Starts a 2-second timer, then replaces itself with Register.
-class _SplashScreenState extends State<SplashScreen> {
+/// @dev Starts a 2-second timer, then replaces itself with the session
+/// destination.
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   /// @notice Starts the splash delay timer.
   /// @dev Guards navigation with {mounted}.
   /// @return void
@@ -48,7 +55,14 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(RegisterScreen.routeName);
+      final AuthSession? session = ref.read(sessionProvider);
+      final String target = switch (session) {
+        null => RegisterScreen.routeName,
+        AuthSession(onboardingRequired: true) =>
+          RegisterEmailScreen.googleRouteName,
+        _ => KosplyMainLayout.routeName,
+      };
+      Navigator.of(context).pushReplacementNamed(target);
     });
   }
 

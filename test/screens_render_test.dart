@@ -38,6 +38,8 @@ import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
 import 'package:kosply_mobile/widgets/common/brand/kosply_wordmark.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 
+import 'helpers/kosply_test_app.dart';
+
 /// @notice Screen-by-screen render checks.
 /// @return void
 void main() {
@@ -77,10 +79,7 @@ void main() {
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(
-        ProviderScope(child: MaterialApp(home: entry.value)),
-      );
-      await tester.pump();
+      await pumpKosplyApp(tester, entry.value);
 
       expect(tester.takeException(), isNull);
     });
@@ -111,10 +110,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: HomeScreen())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const HomeScreen());
 
     expect(find.byType(ProductGrid), findsWidgets);
     expect(find.byKey(const Key('ai-fab')), findsOneWidget);
@@ -128,10 +124,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: KosplyMainLayout())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const KosplyMainLayout());
 
     expect(find.byType(KosplyMark), findsOneWidget);
     expect(find.byType(BackButton), findsNothing);
@@ -185,10 +178,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: SettingsScreen())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen());
 
     expect(find.byType(SettingsScreen), findsOneWidget);
     expect(tester.takeException(), isNull);

@@ -6,10 +6,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/seller/chat/chat_seller_bar.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
@@ -21,7 +22,7 @@ import '../../main/inbox/chat_detail_screen.dart';
 
 /// @title SellerDetailScreen
 /// @notice Seller profile and catalogue screen.
-class SellerDetailScreen extends StatefulWidget {
+class SellerDetailScreen extends ConsumerStatefulWidget {
   /// @notice Creates the seller screen.
   /// @param sellerId Identifier of the seller to show.
   /// @return A new {SellerDetailScreen} instance.
@@ -53,12 +54,12 @@ class SellerDetailScreen extends StatefulWidget {
   /// @notice Creates the mutable filter state.
   /// @return The {_SellerDetailScreenState} instance.
   @override
-  State<SellerDetailScreen> createState() => _SellerDetailScreenState();
+  ConsumerState<SellerDetailScreen> createState() => _SellerDetailScreenState();
 }
 
 /// @title _SellerDetailScreenState
 /// @notice Holds the selected catalogue filter.
-class _SellerDetailScreenState extends State<SellerDetailScreen> {
+class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
   /// @dev Currently selected chip label.
   String _filter = SellerDetailScreen.filterAll;
 
@@ -104,10 +105,13 @@ class _SellerDetailScreenState extends State<SellerDetailScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final Seller seller = PlaceholderCatalog.sellerById(widget.sellerId);
-    final List<Product> listed = PlaceholderCatalog.productsBySeller(
-      widget.sellerId,
-    );
+    final Seller? seller = ref.watch(sellerProvider(widget.sellerId)).value;
+    final List<Product> listed =
+        ref.watch(sellerProductsProvider(widget.sellerId)).value ??
+        const <Product>[];
+    if (seller == null) {
+      return const _MissingSeller();
+    }
     final List<Product> visible = _filtered(listed);
 
     return Scaffold(
@@ -173,6 +177,31 @@ class _SellerDetailScreenState extends State<SellerDetailScreen> {
       ),
       bottomNavigationBar: ChatSellerBar(
         onPressed: () => ChatDetailScreen.push(context, widget.sellerId),
+      ),
+    );
+  }
+}
+
+/// @dev Empty shell for an unknown seller id, keeping the back arrow reachable.
+class _MissingSeller extends StatelessWidget {
+  const _MissingSeller();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: KosplyColors.backgroundOf(context),
+      appBar: AppBar(
+        backgroundColor: KosplyColors.backgroundOf(context),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: PhosphorGlyph(
+            PhosphorCode.arrowLeft,
+            size: 20,
+            color: KosplyColors.textPrimaryOf(context),
+          ),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
       ),
     );
   }

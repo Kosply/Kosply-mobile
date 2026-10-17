@@ -5,9 +5,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
 import '../../../models/catalog/product.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/product/grid/product_grid.dart';
@@ -17,7 +18,7 @@ import '../home/see_all_screen.dart';
 
 /// @title SearchScreen
 /// @notice Search tab body.
-class SearchScreen extends StatefulWidget {
+class SearchScreen extends ConsumerStatefulWidget {
   /// @notice Creates the search screen.
   /// @return A new {SearchScreen} instance.
   const SearchScreen({super.key});
@@ -35,23 +36,19 @@ class SearchScreen extends StatefulWidget {
   /// @notice Creates the mutable chip state.
   /// @return The {_SearchScreenState} instance.
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
 /// @title _SearchScreenState
 /// @notice Holds the selected history chip.
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _selectedHistory = SearchScreen.history.first;
 
-  static final List<Product> _recentItems = PlaceholderCatalog.all().reversed
-      .take(4)
-      .toList();
-
-  void _openSeeAll(BuildContext context) {
+  void _openSeeAll(BuildContext context, List<Product> items) {
     SeeAllScreen.push(
       context,
       title: 'Dibuka terakhir',
-      items: PlaceholderCatalog.all().reversed.toList(),
+      items: items.reversed.toList(),
     );
   }
 
@@ -60,6 +57,10 @@ class _SearchScreenState extends State<SearchScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    final List<Product> items =
+        ref.watch(catalogProductsProvider).value ?? const <Product>[];
+    final List<Product> recentItems = items.reversed.take(4).toList();
+
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
       body: ListView(
@@ -80,10 +81,10 @@ class _SearchScreenState extends State<SearchScreen> {
           SectionHeading(
             'Dibuka terakhir',
             actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context),
+            onTap: () => _openSeeAll(context, items),
           ),
           const SizedBox(height: 12),
-          ProductGrid(items: _recentItems),
+          ProductGrid(items: recentItems),
         ],
       ),
     );

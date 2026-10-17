@@ -11,7 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/account/account_mode.dart';
+import '../../../models/auth/auth_session.dart';
 import '../../../providers/account/account_mode_provider.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../providers/settings/theme_mode_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/settings/account/account_mode_switch.dart';
@@ -52,6 +54,7 @@ class SettingsScreen extends ConsumerWidget {
     final AccountMode mode = ref.watch(accountModeProvider);
     final bool isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
     final bool isSeller = mode == AccountMode.seller;
+    final AuthSession? session = ref.watch(sessionProvider);
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -88,6 +91,20 @@ class SettingsScreen extends ConsumerWidget {
               color: KosplyColors.textSecondaryOf(context),
             ),
           ),
+          if (session != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Masuk sebagai ${session.email} · ${session.isGoogle ? 'Google' : 'Email'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                color: KosplyColors.primary,
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           _CategoryHeading('General'),
           const SizedBox(height: 10),

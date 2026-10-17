@@ -6,9 +6,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
+import '../../../core/ui_bridge/ui_bridge.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../models/chat/ai_thread.dart';
 import '../../../models/catalog/product.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../providers/chat/ai_chat_provider.dart';
 import 'see_all_screen.dart';
 import '../../../theme/colors/kosply_colors.dart';
@@ -32,10 +34,8 @@ class HomeScreen extends ConsumerWidget {
     'assets/images/placeholder_catalog.png',
   ];
 
-  static final List<Product> _allItems = PlaceholderCatalog.all();
-
-  void _openSeeAll(BuildContext context, String title) {
-    SeeAllScreen.push(context, title: title, items: _allItems);
+  void _openSeeAll(BuildContext context, String title, List<Product> items) {
+    SeeAllScreen.push(context, title: title, items: items);
   }
 
   /// @notice Extra list padding so the floating AI overlay does not cover the
@@ -58,70 +58,79 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AiChatState ai = ref.watch(aiChatProvider);
     final List<AiThread> history = ai.threads;
+    final List<Product> items =
+        ref.watch(catalogProductsProvider).value ?? const <Product>[];
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
-      body: Stack(
-        children: [
-          ListView(
-            key: const Key('home-scroll'),
-            padding: EdgeInsets.fromLTRB(16, 12, 16, _bottomPad(ai)),
-            children: [
-              const KosplySearchbar(),
-              const SizedBox(height: 16),
-              const BannerCarousel(
-                autoAdvanceSeconds: 4,
-                images: _bannerImages,
-              ),
-              const SizedBox(height: 24),
-              SectionHeading(
-                'Rekomendasi',
-                actionLabel: 'Lihat semua',
-                onTap: () => _openSeeAll(context, 'Rekomendasi'),
-              ),
-              const SizedBox(height: 12),
-              ProductGrid(items: _allItems.take(4).toList()),
-              const SizedBox(height: 24),
-              SectionHeading(
-                'Terdekat',
-                actionLabel: 'Lihat semua',
-                onTap: () => _openSeeAll(context, 'Terdekat'),
-              ),
-              const SizedBox(height: 12),
-              ProductGrid(items: _allItems.skip(4).take(4).toList()),
-              const SizedBox(height: 24),
-              SectionHeading(
-                'Semua Produk',
-                actionLabel: 'Lihat semua',
-                onTap: () => _openSeeAll(context, 'Semua Produk'),
-              ),
-              const SizedBox(height: 12),
-              ProductGrid(items: _allItems),
-              const SizedBox(height: 24),
-              const SectionHeading('Chat history'),
-              const SizedBox(height: 8),
-              for (final AiThread thread in history)
-                AiHistoryTile(
-                  key: Key('home-ai-history-${thread.id}'),
-                  thread: thread,
-                  onTap: () =>
-                      ref.read(aiChatProvider.notifier).openThread(thread.id),
-                ),
-            ],
-          ),
-          if (ai.composerOpen || ai.panel != AiPanelKind.hidden)
-            Positioned.fill(
-              child: GestureDetector(
-                key: const Key('ai-dismiss'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => ref.read(aiChatProvider.notifier).close(),
-              ),
-            ),
-          const Align(
-            alignment: Alignment.bottomCenter,
-            child: AiHomeOverlay(),
-          ),
+      body: UiBridgeScope(
+        screen: 'home',
+        elements: <UiElement>[
+          for (final Product item in items)
+            UiElement.product(item.id, label: item.title),
         ],
+        child: Stack(
+          children: [
+            ListView(
+              key: const Key('home-scroll'),
+              padding: EdgeInsets.fromLTRB(16, 12, 16, _bottomPad(ai)),
+              children: [
+                const KosplySearchbar(),
+                const SizedBox(height: 16),
+                const BannerCarousel(
+                  autoAdvanceSeconds: 4,
+                  images: _bannerImages,
+                ),
+                const SizedBox(height: 24),
+                SectionHeading(
+                  'Rekomendasi',
+                  actionLabel: 'Lihat semua',
+                  onTap: () => _openSeeAll(context, 'Rekomendasi', items),
+                ),
+                const SizedBox(height: 12),
+                ProductGrid(items: items.take(4).toList()),
+                const SizedBox(height: 24),
+                SectionHeading(
+                  'Terdekat',
+                  actionLabel: 'Lihat semua',
+                  onTap: () => _openSeeAll(context, 'Terdekat', items),
+                ),
+                const SizedBox(height: 12),
+                ProductGrid(items: items.skip(4).take(4).toList()),
+                const SizedBox(height: 24),
+                SectionHeading(
+                  'Semua Produk',
+                  actionLabel: 'Lihat semua',
+                  onTap: () => _openSeeAll(context, 'Semua Produk', items),
+                ),
+                const SizedBox(height: 12),
+                ProductGrid(items: items),
+                const SizedBox(height: 24),
+                const SectionHeading('Chat history'),
+                const SizedBox(height: 8),
+                for (final AiThread thread in history)
+                  AiHistoryTile(
+                    key: Key('home-ai-history-${thread.id}'),
+                    thread: thread,
+                    onTap: () =>
+                        ref.read(aiChatProvider.notifier).openThread(thread.id),
+                  ),
+              ],
+            ),
+            if (ai.composerOpen || ai.panel != AiPanelKind.hidden)
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const Key('ai-dismiss'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => ref.read(aiChatProvider.notifier).close(),
+                ),
+              ),
+            const Align(
+              alignment: Alignment.bottomCenter,
+              child: AiHomeOverlay(),
+            ),
+          ],
+        ),
       ),
     );
   }

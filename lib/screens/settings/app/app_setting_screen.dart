@@ -10,6 +10,7 @@ import '../../../models/settings/notification_settings.dart';
 import '../../../models/account/user_profile.dart';
 import '../../../providers/settings/notification_settings_provider.dart';
 import '../../../providers/account/profile_provider.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/seller/identity/seller_avatar.dart';
@@ -166,10 +167,18 @@ class AppSettingScreen extends ConsumerWidget {
                   icon: PhosphorCode.signOut,
                   title: 'Log out',
                   description: 'Keluar dari akun Kosply.',
-                  onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                    SplashScreen.routeName,
-                    (Route<dynamic> route) => false,
-                  ),
+                  // @dev Clears the token pair from {SecureStore} before the
+                  // @dev splash decides where to send the user next.
+                  onTap: () async {
+                    await ref.read(sessionProvider.notifier).signOut();
+                    if (!context.mounted) {
+                      return;
+                    }
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      SplashScreen.routeName,
+                      (Route<dynamic> route) => false,
+                    );
+                  },
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

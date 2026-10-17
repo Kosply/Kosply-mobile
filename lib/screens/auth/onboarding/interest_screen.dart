@@ -104,9 +104,9 @@ class _InterestScreenState extends State<InterestScreen> {
       ),
       bottomBar: FormActions(
         onBack: () {},
-        onContinue: () => Navigator.of(
-          context,
-        ).pushReplacementNamed(KosplyMainLayout.routeName),
+        onContinue: () =>
+            Navigator.of(context)
+                .pushReplacementNamed(KosplyMainLayout.routeName),
         continueLabel: 'Start browsing',
         showBack: false,
       ),

@@ -1,17 +1,25 @@
 /// @title Favorites provider
 /// @notice Holds product ids saved from the product-detail heart.
+/// @dev Backed by the Drift cache; the in-memory set follows the
+/// {favoriteIdsProvider} stream and toggles write through the repository.
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'catalog_providers.dart';
+
 /// @title FavoritesNotifier
-/// @notice Mutates the in-memory favorite id set.
+/// @notice Mirrors the cached favorite ids for sync reads in widgets.
 class FavoritesNotifier extends Notifier<Set<String>> {
-  /// @notice Starts with no saved products.
-  /// @return The empty favorite set.
+  /// @notice Follows the cached favorite ids.
+  /// @return The current favorite set, empty before the first read.
   @override
-  Set<String> build() => <String>{};
+  Set<String> build() {
+    return ref.watch(favoriteIdsProvider).value ?? const <String>{};
+  }
 
   /// @notice Whether [productId] is currently saved.
   /// @param productId Catalogue item id.
@@ -22,15 +30,11 @@ class FavoritesNotifier extends Notifier<Set<String>> {
   /// @param productId Catalogue item id.
   /// @return void
   void toggle(String productId) {
-    final Set<String> next = Set<String>.from(state);
-    if (!next.remove(productId)) {
-      next.add(productId);
-    }
-    state = next;
+    unawaited(ref.read(catalogRepositoryProvider).toggleFavorite(productId));
   }
 }
 
-/// @dev Session-scoped favorites. Empty until a product-detail heart is tapped.
+/// @dev Favorites view of the cache, refreshed whenever the table changes.
 final favoritesProvider = NotifierProvider<FavoritesNotifier, Set<String>>(
   FavoritesNotifier.new,
 );

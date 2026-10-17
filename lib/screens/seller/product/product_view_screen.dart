@@ -1,7 +1,7 @@
 /// @title ProductViewScreen
 /// @notice Detail view of a single catalogue item.
-/// @dev Receives only a product id and resolves the rest through
-/// [PlaceholderCatalog]. The hero and the thumbnail strip stay in sync.
+/// @dev Receives only a product id and resolves the rest through the cached
+/// catalogue. The hero and the thumbnail strip stay in sync.
 /// Chat sits in a pinned bar so the title and price can read as a block.
 /// @author Kosply-mobile
 library;
@@ -9,9 +9,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
+import '../../../core/ui_bridge/ui_bridge.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
+import '../../../core/ui_bridge/ui_ids.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../providers/catalog/favorites_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/seller/chat/chat_seller_bar.dart';
@@ -24,7 +27,7 @@ import '../detail/seller_detail_screen.dart';
 
 /// @title ProductViewScreen
 /// @notice Product detail screen.
-class ProductViewScreen extends StatelessWidget {
+class ProductViewScreen extends ConsumerWidget {
   /// @notice Creates the detail screen.
   /// @param productId Identifier of the product to show.
   /// @return A new {ProductViewScreen} instance.
@@ -46,14 +49,22 @@ class ProductViewScreen extends StatelessWidget {
 
   /// @notice Builds the product detail.
   /// @param context The build context.
+  /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
-  Widget build(BuildContext context) {
-    final Product product = PlaceholderCatalog.byId(productId);
-    final List<Product> related = PlaceholderCatalog.all()
-        .where((Product item) => item.id != productId)
-        .take(4)
-        .toList();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Product? product = ref.watch(catalogProductProvider(productId)).value;
+    if (product == null) {
+      return const _MissingProduct();
+    }
+    final List<Product> related =
+        ref
+            .watch(catalogProductsProvider)
+            .value
+            ?.where((Product item) => item.id != productId)
+            .take(4)
+            .toList() ??
+        const <Product>[];
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -78,37 +89,84 @@ class ProductViewScreen extends StatelessWidget {
           const SizedBox(width: 4),
         ],
       ),
-      body: ListView(
-        key: const Key('product-detail-scroll'),
-        children: [
-          _ProductGallery(product: product),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TitlePriceBlock(product: product),
-                const SizedBox(height: 16),
-                _DescriptionBlock(description: product.description),
-                const SizedBox(height: 8),
-                _InfoBlock(product: product),
-                const SizedBox(height: 16),
-                _SellerBlock(
-                  product: product,
-                  onTap: () =>
-                      SellerDetailScreen.push(context, product.sellerId),
-                ),
-                const SizedBox(height: 24),
-                const SectionHeading('Rekomendasi'),
-                const SizedBox(height: 12),
-                ProductGrid(items: related),
-              ],
-            ),
+      body: UiBridgeScope(
+        screen: 'product_view',
+        elements: <UiElement>[
+          UiElement.product(product.id, label: product.title),
+          UiElement.button(
+            'chat',
+            label: 'Chat penjual',
+            target: product.sellerId,
+            callback: UiCallbacks.openChat,
+            args: <String, Object?>{'sellerId': product.sellerId},
           ),
+          UiElement.button('favorite', label: 'Simpan', target: product.id),
         ],
+        child: ListView(
+          key: const Key('product-detail-scroll'),
+          children: [
+            _ProductGallery(product: product),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TitlePriceBlock(product: product),
+                  const SizedBox(height: 16),
+                  _DescriptionBlock(description: product.description),
+                  const SizedBox(height: 8),
+                  _InfoBlock(product: product),
+                  const SizedBox(height: 16),
+                  _SellerBlock(
+                    product: product,
+                    onTap: () =>
+                        SellerDetailScreen.push(context, product.sellerId),
+                  ),
+                  const SizedBox(height: 24),
+                  const SectionHeading('Rekomendasi'),
+                  const SizedBox(height: 12),
+                  ProductGrid(items: related),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: ChatSellerBar(
-        onPressed: () => ChatDetailScreen.push(context, product.sellerId),
+        onPressed: () {
+          ref
+              .read(uiBridgeProvider.notifier)
+              .recordClick(
+                id: UiIds.button('chat', target: product.sellerId),
+                kind: UiElementKinds.button,
+              );
+          ChatDetailScreen.push(context, product.sellerId);
+        },
+      ),
+    );
+  }
+}
+
+/// @dev Empty shell for an unknown product id, keeping the back arrow reachable.
+class _MissingProduct extends StatelessWidget {
+  const _MissingProduct();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: KosplyColors.backgroundOf(context),
+      appBar: AppBar(
+        backgroundColor: KosplyColors.backgroundOf(context),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: PhosphorGlyph(
+            PhosphorCode.arrowLeft,
+            size: 20,
+            color: KosplyColors.textPrimaryOf(context),
+          ),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
       ),
     );
   }
@@ -134,7 +192,15 @@ class _FavoriteButton extends ConsumerWidget {
             ? KosplyColors.primary
             : KosplyColors.textPrimaryOf(context),
       ),
-      onPressed: () => ref.read(favoritesProvider.notifier).toggle(productId),
+      onPressed: () {
+        ref
+            .read(uiBridgeProvider.notifier)
+            .recordClick(
+              id: UiIds.button('favorite', target: productId),
+              kind: UiElementKinds.button,
+            );
+        ref.read(favoritesProvider.notifier).toggle(productId);
+      },
     );
   }
 }

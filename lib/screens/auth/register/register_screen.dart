@@ -2,13 +2,16 @@
 /// @notice Registration landing screen.
 /// @dev Layout keeps the approved design: top wordmark, centered illustration
 /// block, and bottom-pinned actions. Reuses {SocialSignInButton},
-/// {FormActions}, {KosplyWordmark}, and {KosplyColors}.
+/// {FormActions}, {KosplyWordmark}, and {KosplyColors}. Google sign-in stores
+/// the session in {SecureStore} and opens the shortened registration form,
+/// which skips email, password, and verification.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../layouts/main_layout.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/auth/form/form_actions.dart';
 import '../../../widgets/common/brand/kosply_wordmark.dart';
@@ -18,7 +21,7 @@ import 'register_email_screen.dart';
 
 /// @title RegisterScreen
 /// @notice Registration screen widget.
-class RegisterScreen extends StatelessWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   /// @notice Creates the register screen.
   /// @param key Optional widget key.
   /// @return A new {RegisterScreen} instance.
@@ -34,6 +37,20 @@ class RegisterScreen extends StatelessWidget {
     return Navigator.of(context).pushNamed(routeName);
   }
 
+  /// @notice Creates the mutable state.
+  /// @return The {_RegisterScreenState} instance.
+  @override
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+/// @title _RegisterScreenState
+/// @notice Mutable state for {RegisterScreen}.
+/// @dev Guards the Google button against double taps while the session and
+/// tokens are being written.
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  /// @dev True while the Google sign-in is running.
+  bool _busy = false;
+
   /// @notice Opens the email login form.
   /// @param context The build context.
   /// @return Future completing when {LoginScreen} is popped.
@@ -48,13 +65,22 @@ class RegisterScreen extends StatelessWidget {
     Navigator.of(context).pushNamed(RegisterEmailScreen.routeName);
   }
 
-  /// @notice Opens the nested home shell.
-  /// @dev Placeholder destination for the social sign-in buttons and the
-  /// "Already have an account? Sign in" link until the auth flow is wired.
-  /// @param context The build context.
-  /// @return Future completing when the shell is popped.
-  void _openHome(BuildContext context) {
-    Navigator.of(context).pushReplacementNamed(KosplyMainLayout.routeName);
+  /// @notice Signs in with Google and opens the shortened registration form.
+  /// @dev The demo gateway stores the token pair in {SecureStore}; the real
+  /// client id and backend exchange replace it later.
+  /// @return Future completing when navigation starts.
+  Future<void> _continueWithGoogle() async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+    await ref.read(sessionProvider.notifier).signInWithGoogle();
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pushReplacementNamed(
+      RegisterEmailScreen.googleRouteName,
+    );
   }
 
   /// @notice Builds the register screen.
@@ -84,9 +110,7 @@ class RegisterScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Image(
-                        image: AssetImage(
-                          'assets/images/register_artwork.png',
-                        ),
+                        image: AssetImage('assets/images/register_artwork.png'),
                         height: 260,
                         fit: BoxFit.contain,
                       ),
@@ -114,7 +138,7 @@ class RegisterScreen extends StatelessWidget {
                   SocialSignInButton(
                     label: 'Continue with Google',
                     asset: 'assets/images/google.png',
-                    onTap: () => _openHome(context),
+                    onTap: () => _continueWithGoogle(),
                   ),
                   // SocialSignInButton(
                   //   label: 'Continue with Apple',
@@ -175,9 +199,7 @@ class RegisterScreen extends StatelessWidget {
                           'Already have an account? ',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: KosplyColors.textSecondary,
-                          ),
+                          style: TextStyle(color: KosplyColors.textSecondary),
                         ),
                       ),
                       Flexible(

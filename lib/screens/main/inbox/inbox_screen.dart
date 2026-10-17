@@ -4,9 +4,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/inbox/placeholder_inbox.dart';
 import '../../../models/chat/conversation.dart';
+import '../../../providers/inbox/inbox_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/search/searchbar.dart';
@@ -15,7 +16,7 @@ import 'chat_detail_screen.dart';
 
 /// @title InboxScreen
 /// @notice Inbox tab body.
-class InboxScreen extends StatefulWidget {
+class InboxScreen extends ConsumerStatefulWidget {
   /// @notice Creates the inbox screen.
   /// @return A new {InboxScreen} instance.
   const InboxScreen({super.key});
@@ -37,29 +38,31 @@ class InboxScreen extends StatefulWidget {
   /// @notice Creates the mutable search state.
   /// @return The {_InboxScreenState} instance.
   @override
-  State<InboxScreen> createState() => _InboxScreenState();
+  ConsumerState<InboxScreen> createState() => _InboxScreenState();
 }
 
 /// @title _InboxScreenState
 /// @notice Holds the username query and selected category.
-class _InboxScreenState extends State<InboxScreen> {
+class _InboxScreenState extends ConsumerState<InboxScreen> {
   String _query = '';
   String _category = InboxScreen.filterAll;
 
-  List<Conversation> get _visible {
+  List<Conversation> _visible(List<Conversation> items) {
     final String needle = _query.trim().toLowerCase();
-    Iterable<Conversation> items = PlaceholderInbox.conversations();
+    Iterable<Conversation> filtered = items;
     if (needle.isNotEmpty) {
-      items = items.where(
+      filtered = filtered.where(
         (Conversation item) => item.peer.name.toLowerCase().contains(needle),
       );
     }
     if (_category == InboxScreen.filterUnread) {
-      items = items.where((Conversation item) => item.hasUnread);
+      filtered = filtered.where((Conversation item) => item.hasUnread);
     } else if (_category != InboxScreen.filterAll) {
-      items = items.where((Conversation item) => item.category == _category);
+      filtered = filtered.where(
+        (Conversation item) => item.category == _category,
+      );
     }
-    return items.toList();
+    return filtered.toList();
   }
 
   /// @notice Builds the inbox list.
@@ -67,7 +70,9 @@ class _InboxScreenState extends State<InboxScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final List<Conversation> items = _visible;
+    final List<Conversation> all =
+        ref.watch(inboxConversationsProvider).value ?? const <Conversation>[];
+    final List<Conversation> items = _visible(all);
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),

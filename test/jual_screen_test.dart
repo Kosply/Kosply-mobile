@@ -15,32 +15,31 @@ import 'package:kosply_mobile/screens/main/jual/jual_screen.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
 
+import 'helpers/kosply_test_app.dart';
+
 /// @notice Jual dashboard behaviour checks.
 /// @return void
 void main() {
-  Future<void> pumpJual(WidgetTester tester) async {
+  Future<ProviderContainer> pumpJual(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1170, 2100);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: const JualScreen(),
-          routes: <String, WidgetBuilder>{
-            AddProductScreen.routeName: (_) => const AddProductScreen(),
-            AnalyticScreen.routeName: (_) => const AnalyticScreen(),
-          },
-        ),
-      ),
+    return pumpKosplyApp(
+      tester,
+      const JualScreen(),
+      routes: <String, WidgetBuilder>{
+        AddProductScreen.routeName: (_) => const AddProductScreen(),
+        AnalyticScreen.routeName: (_) => const AnalyticScreen(),
+      },
     );
-    await tester.pump();
   }
 
-  Future<void> setSeller(WidgetTester tester) async {
-    ProviderScope.containerOf(tester.element(find.byType(JualScreen)))
-        .read(accountModeProvider.notifier)
-        .setMode(AccountMode.seller);
+  Future<void> setSeller(
+    WidgetTester tester,
+    ProviderContainer container,
+  ) async {
+    container.read(accountModeProvider.notifier).setMode(AccountMode.seller);
     await tester.pump();
   }
 
@@ -76,8 +75,8 @@ void main() {
   testWidgets('analytic button opens the analytic screen', (
     WidgetTester tester,
   ) async {
-    await pumpJual(tester);
-    await setSeller(tester);
+    final ProviderContainer container = await pumpJual(tester);
+    await setSeller(tester, container);
 
     await tester.tap(find.byKey(const Key('jual-analytic')));
     await tester.pumpAndSettle();

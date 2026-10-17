@@ -4,15 +4,16 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/support/placeholder_help.dart';
 import '../../../models/support/help_topic.dart';
+import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @title HelpDeskScreen
 /// @notice Help desk destination opened from Settings.
-class HelpDeskScreen extends StatefulWidget {
+class HelpDeskScreen extends ConsumerStatefulWidget {
   /// @notice Creates the help desk screen.
   /// @return A new {HelpDeskScreen} instance.
   const HelpDeskScreen({super.key});
@@ -30,12 +31,12 @@ class HelpDeskScreen extends StatefulWidget {
   /// @notice Creates the mutable expanded-topic state.
   /// @return The {_HelpDeskScreenState} instance.
   @override
-  State<HelpDeskScreen> createState() => _HelpDeskScreenState();
+  ConsumerState<HelpDeskScreen> createState() => _HelpDeskScreenState();
 }
 
 /// @title _HelpDeskScreenState
 /// @notice Holds which FAQ row is currently expanded.
-class _HelpDeskScreenState extends State<HelpDeskScreen> {
+class _HelpDeskScreenState extends ConsumerState<HelpDeskScreen> {
   String? _expandedTitle;
 
   /// @notice Builds the expandable FAQ list.
@@ -43,7 +44,8 @@ class _HelpDeskScreenState extends State<HelpDeskScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final List<HelpTopic> topics = PlaceholderHelp.topics;
+    final List<HelpTopic> topics =
+        ref.watch(helpTopicsProvider).value ?? const <HelpTopic>[];
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),

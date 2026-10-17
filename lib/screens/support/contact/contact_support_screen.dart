@@ -4,9 +4,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/support/placeholder_help.dart';
+import '../../../models/catalog/seller.dart';
 import '../../../models/support/support_ticket.dart';
+import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -17,7 +19,7 @@ import '../ticket/ticket_detail_screen.dart';
 
 /// @title ContactSupportScreen
 /// @notice Contact support destination opened from Settings.
-class ContactSupportScreen extends StatefulWidget {
+class ContactSupportScreen extends ConsumerStatefulWidget {
   /// @notice Creates the contact support screen.
   /// @return A new {ContactSupportScreen} instance.
   const ContactSupportScreen({super.key});
@@ -45,27 +47,28 @@ class ContactSupportScreen extends StatefulWidget {
   /// @notice Creates the mutable search and filter state.
   /// @return The {_ContactSupportScreenState} instance.
   @override
-  State<ContactSupportScreen> createState() => _ContactSupportScreenState();
+  ConsumerState<ContactSupportScreen> createState() =>
+      _ContactSupportScreenState();
 }
 
 /// @title _ContactSupportScreenState
 /// @notice Holds the ticket query and selected status chip.
-class _ContactSupportScreenState extends State<ContactSupportScreen> {
+class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
   String _query = '';
   String _status = ContactSupportScreen.filterAll;
 
-  List<SupportTicket> get _visible {
+  List<SupportTicket> _visible(List<SupportTicket> items) {
     final String needle = _query.trim().toLowerCase();
-    Iterable<SupportTicket> items = PlaceholderHelp.tickets();
+    Iterable<SupportTicket> filtered = items;
     if (needle.isNotEmpty) {
-      items = items.where(
+      filtered = filtered.where(
         (SupportTicket item) => item.title.toLowerCase().contains(needle),
       );
     }
     if (_status != ContactSupportScreen.filterAll) {
-      items = items.where((SupportTicket item) => item.status == _status);
+      filtered = filtered.where((SupportTicket item) => item.status == _status);
     }
-    return items.toList();
+    return filtered.toList();
   }
 
   /// @notice Builds the ticket list.
@@ -73,7 +76,10 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final List<SupportTicket> items = _visible;
+    final List<SupportTicket> all =
+        ref.watch(supportTicketsProvider).value ?? const <SupportTicket>[];
+    final List<SupportTicket> items = _visible(all);
+    final Seller agent = ref.watch(supportRepositoryProvider).agent;
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -142,7 +148,8 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
               ),
             )
           else
-            for (final SupportTicket item in items) _TicketTile(item: item),
+            for (final SupportTicket item in items)
+              _TicketTile(item: item, agent: agent),
         ],
       ),
     );
@@ -183,9 +190,10 @@ class _CreateTicketButton extends StatelessWidget {
 /// @title _TicketTile
 /// @notice Photo, ticket title, preview, time, and unread fill.
 class _TicketTile extends StatelessWidget {
-  const _TicketTile({required this.item});
+  const _TicketTile({required this.item, required this.agent});
 
   final SupportTicket item;
+  final Seller agent;
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +211,7 @@ class _TicketTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            SellerAvatar.seller(PlaceholderHelp.agent, size: 48),
+            SellerAvatar.seller(agent, size: 48),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

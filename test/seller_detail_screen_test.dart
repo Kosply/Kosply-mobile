@@ -5,12 +5,13 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
 import 'package:kosply_mobile/screens/seller/detail/seller_detail_screen.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
+
+import 'helpers/kosply_test_app.dart';
 
 /// @notice Seller detail behaviour checks.
 /// @return void
@@ -20,10 +21,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const MaterialApp(home: SellerDetailScreen(sellerId: 'seller-1')),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const SellerDetailScreen(sellerId: 'seller-1'));
   }
 
   testWidgets('seller detail shows identity, bio, heading, filters and cards', (
@@ -64,23 +62,19 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: const ProductViewScreen(productId: 'product-0'),
-          onGenerateRoute: (RouteSettings settings) {
-            if (settings.name == SellerDetailScreen.routeName) {
-              return MaterialPageRoute<void>(
-                builder: (_) =>
-                    SellerDetailScreen(sellerId: settings.arguments! as String),
-              );
-            }
-            return null;
-          },
-        ),
-      ),
+    await pumpKosplyApp(
+      tester,
+      const ProductViewScreen(productId: 'product-0'),
+      onGenerateRoute: (RouteSettings settings) {
+        if (settings.name == SellerDetailScreen.routeName) {
+          return MaterialPageRoute<void>(
+            builder: (_) =>
+                SellerDetailScreen(sellerId: settings.arguments! as String),
+          );
+        }
+        return null;
+      },
     );
-    await tester.pump();
 
     await tester.ensureVisible(find.byType(SellerIdentity));
     await tester.pumpAndSettle();

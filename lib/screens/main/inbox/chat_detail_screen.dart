@@ -4,10 +4,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/inbox/placeholder_inbox.dart';
-import '../../../models/chat/conversation.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../models/chat/conversation.dart';
+import '../../../providers/inbox/inbox_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/seller/appbar/seller_app_bar.dart';
@@ -15,7 +16,7 @@ import '../../../widgets/seller/identity/seller_avatar.dart';
 
 /// @title ChatDetailScreen
 /// @notice One conversation opened from Inbox or Chat penjual.
-class ChatDetailScreen extends StatelessWidget {
+class ChatDetailScreen extends ConsumerWidget {
   /// @notice Creates the chat screen.
   /// @param sellerId Identifier of the other student, matching a conversation.
   /// @return A new {ChatDetailScreen} instance.
@@ -37,12 +38,20 @@ class ChatDetailScreen extends StatelessWidget {
 
   /// @notice Builds the thread.
   /// @param context The build context.
+  /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
-  Widget build(BuildContext context) {
-    final Conversation conversation = PlaceholderInbox.byId(sellerId);
-    final Seller peer = conversation.peer;
-    final List<ChatMessage> messages = PlaceholderInbox.messagesFor(sellerId);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Seller? peer = ref.watch(chatPeerProvider(sellerId)).value;
+    final List<ChatMessage> messages =
+        ref.watch(chatMessagesProvider(sellerId)).value ??
+        const <ChatMessage>[];
+    if (peer == null) {
+      return Scaffold(
+        backgroundColor: KosplyColors.backgroundOf(context),
+        appBar: AppBar(backgroundColor: KosplyColors.backgroundOf(context)),
+      );
+    }
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),

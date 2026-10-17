@@ -1,13 +1,17 @@
 /// @title LoginScreen
 /// @notice Email login form.
 /// @dev Built from the shared auth widgets: {AuthScaffold}, {AuthTextField},
-/// and {FormActions}. Navigation is done through named routes.
+/// and {FormActions}. Signing in stores the session and tokens through
+/// {SecureStore} and lands on the home shell.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../layouts/main_layout.dart';
+import '../../../models/form/form_step.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/auth/scaffold/auth_scaffold.dart';
 import '../../../widgets/auth/fields/auth_text_field.dart';
@@ -17,7 +21,7 @@ import '../forgot_password/forgot_password_screen.dart';
 
 /// @title LoginScreen
 /// @notice Email login screen.
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   /// @notice Creates the login screen.
   /// @param key Optional widget key.
   /// @return A new {LoginScreen} instance.
@@ -36,18 +40,24 @@ class LoginScreen extends StatefulWidget {
   /// @notice Creates the mutable state.
   /// @return The {_LoginScreenState} instance.
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
 /// @title _LoginScreenState
 /// @notice Mutable state for {LoginScreen}.
-/// @dev Holds the email and password controllers; no validation yet.
-class _LoginScreenState extends State<LoginScreen> {
+/// @dev Holds the email and password controllers and their error messages.
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// @dev Email input controller.
   final TextEditingController _email = TextEditingController();
 
   /// @dev Password input controller.
   final TextEditingController _password = TextEditingController();
+
+  /// @dev Validation error of the email field.
+  String? _emailError;
+
+  /// @dev Validation error of the password field.
+  String? _passwordError;
 
   /// @notice Releases both controllers.
   /// @return void
@@ -58,9 +68,30 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// @notice Validates both fields, stores the session, and opens home.
+  /// @dev The password is only checked locally for now; the backend verifies
+  /// it once `/auth` is wired, and it is never persisted on device.
+  /// @return Future completing when navigation starts.
+  Future<void> _signIn() async {
+    final String? emailError = FormValidators.email()(_email.text);
+    final String? passwordError = FormValidators.password()(_password.text);
+    if (emailError != null || passwordError != null) {
+      setState(() {
+        _emailError = emailError;
+        _passwordError = passwordError;
+      });
+      return;
+    }
+    await ref
+        .read(sessionProvider.notifier)
+        .signInWithEmail(email: _email.text.trim());
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pushReplacementNamed(KosplyMainLayout.routeName);
+  }
+
   /// @notice Builds the login form.
-  /// @dev Back pops the screen; the primary action lands on
-  /// {KosplyMainLayout} until the real authentication is implemented.
   /// @param context The build context.
   /// @return The login screen widget.
   @override
@@ -77,6 +108,12 @@ class _LoginScreenState extends State<LoginScreen> {
             hint: 'name@kampus.ac.id',
             helper: 'Use the email you signed up with.',
             keyboardType: TextInputType.emailAddress,
+            error: _emailError,
+            onChanged: (_) {
+              if (_emailError != null) {
+                setState(() => _emailError = null);
+              }
+            },
           ),
           const SizedBox(height: 16),
           AuthTextField(
@@ -84,6 +121,12 @@ class _LoginScreenState extends State<LoginScreen> {
             label: 'Password',
             hint: 'Your password',
             obscure: true,
+            error: _passwordError,
+            onChanged: (_) {
+              if (_passwordError != null) {
+                setState(() => _passwordError = null);
+              }
+            },
           ),
           const SizedBox(height: 12),
           Row(
@@ -99,9 +142,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               Flexible(
                 child: GestureDetector(
-                  onTap: () => Navigator.of(
-                    context,
-                  ).pushNamed(ForgotPasswordScreen.routeName),
+                  onTap: () =>
+                      Navigator.of(context)
+                          .pushNamed(ForgotPasswordScreen.routeName),
                   child: const Text(
                     'Reset password',
                     maxLines: 1,
@@ -119,9 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       bottomBar: FormActions(
         onBack: () => Navigator.of(context).pop(),
-        onContinue: () => Navigator.of(
-          context,
-        ).pushReplacementNamed(KosplyMainLayout.routeName),
+        onContinue: _signIn,
         backLabel: 'Go back',
         continueLabel: 'Sign in',
       ),

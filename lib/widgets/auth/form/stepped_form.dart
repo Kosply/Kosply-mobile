@@ -22,12 +22,14 @@ import 'form_heading.dart';
 class SteppedForm extends StatefulWidget {
   /// @notice Creates a stepped form.
   /// @param steps Ordered list of steps to render.
-  /// @param onCompleted Called when the last step is submitted successfully.
+  /// @param onCompleted Called with one value per step when the last step is
+  /// submitted successfully; code steps contribute their joined digits.
   /// @param onExit Called when Back is pressed on the first step; defaults to
   /// popping the current route.
   /// @param continueLabel Label of the primary button.
   /// @param emailStepIndex Index of the step holding the email address shown
   /// in the verification reminder line.
+  /// @param initialValues Prefilled text per step index, e.g. the Google name.
   /// @return A new {SteppedForm} instance.
   const SteppedForm({
     required this.steps,
@@ -35,14 +37,15 @@ class SteppedForm extends StatefulWidget {
     this.onExit,
     this.continueLabel = 'Continue',
     this.emailStepIndex = 0,
+    this.initialValues = const <int, String>{},
     super.key,
   });
 
   /// @dev Ordered list of steps to render.
   final List<FormStep> steps;
 
-  /// @dev Called when the last step is submitted successfully.
-  final VoidCallback onCompleted;
+  /// @dev Called with one value per step when the last step is submitted.
+  final void Function(List<String> values) onCompleted;
 
   /// @dev Called when Back is pressed on the first step.
   final VoidCallback? onExit;
@@ -52,6 +55,9 @@ class SteppedForm extends StatefulWidget {
 
   /// @dev Index of the step holding the email address.
   final int emailStepIndex;
+
+  /// @dev Prefilled text per step index.
+  final Map<int, String> initialValues;
 
   /// @notice Creates the mutable state.
   /// @return The {_SteppedFormState} instance.
@@ -94,7 +100,7 @@ class _SteppedFormState extends State<SteppedForm> {
   TextEditingController _controllerFor(int index) {
     return _controllers.putIfAbsent(
       index,
-      () => TextEditingController(),
+      () => TextEditingController(text: widget.initialValues[index]),
     );
   }
 
@@ -142,6 +148,18 @@ class _SteppedFormState extends State<SteppedForm> {
     });
   }
 
+  /// @notice Reads one value per step.
+  /// @return The step values, code digits joined per code step.
+  List<String> _collectValues() {
+    return [
+      for (int index = 0; index < widget.steps.length; index++)
+        if (widget.steps[index].isCodeStep)
+          _codeControllers.map((c) => c.text).join()
+        else
+          _controllerFor(index).text,
+    ];
+  }
+
   /// @notice Validates the active step and advances when valid.
   /// @dev Calls {SteppedForm.onCompleted} after the last step.
   /// @return void
@@ -153,7 +171,7 @@ class _SteppedFormState extends State<SteppedForm> {
       return;
     }
     if (_step == widget.steps.length - 1) {
-      widget.onCompleted();
+      widget.onCompleted(_collectValues());
       return;
     }
     setState(() {

@@ -6,9 +6,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
 import '../../../models/catalog/product.dart';
-import '../../../providers/catalog/favorites_provider.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -47,20 +46,6 @@ class _FavoriteScreenState extends ConsumerState<FavoriteScreen> {
   String _query = '';
   String _filter = FavoriteScreen.filterAll;
 
-  /// @notice Resolves saved ids into catalogue products, dropping unknowns.
-  /// @param ids Favorite product ids.
-  /// @return Matching catalogue items in id order.
-  List<Product> _saved(Set<String> ids) {
-    final List<Product> items = <Product>[];
-    for (final String id in ids) {
-      final Product product = PlaceholderCatalog.byId(id);
-      if (product.id == id) {
-        items.add(product);
-      }
-    }
-    return items;
-  }
-
   /// @notice Labels for the chip bar: Semua plus categories present in [items].
   /// @param items Currently saved products.
   /// @return Chip labels in display order.
@@ -97,7 +82,8 @@ class _FavoriteScreenState extends ConsumerState<FavoriteScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final List<Product> saved = _saved(ref.watch(favoritesProvider));
+    final List<Product> saved =
+        ref.watch(favoriteProductsProvider).value ?? const <Product>[];
     final List<String> chips = _chipLabels(saved);
     final String filter = chips.contains(_filter)
         ? _filter

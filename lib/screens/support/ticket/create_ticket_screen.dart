@@ -4,8 +4,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/support/placeholder_help.dart';
+import '../../../models/support/help_topic.dart';
+import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/forms/kosply_dropdown.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -13,7 +15,7 @@ import '../../../widgets/common/headings/section_heading.dart';
 
 /// @title CreateTicketScreen
 /// @notice Form opened from the Contact support plus button.
-class CreateTicketScreen extends StatefulWidget {
+class CreateTicketScreen extends ConsumerStatefulWidget {
   /// @notice Creates the create-ticket screen.
   /// @return A new {CreateTicketScreen} instance.
   const CreateTicketScreen({super.key});
@@ -31,12 +33,12 @@ class CreateTicketScreen extends StatefulWidget {
   /// @notice Creates the mutable form state.
   /// @return The {_CreateTicketScreenState} instance.
   @override
-  State<CreateTicketScreen> createState() => _CreateTicketScreenState();
+  ConsumerState<CreateTicketScreen> createState() => _CreateTicketScreenState();
 }
 
 /// @title _CreateTicketScreenState
 /// @notice Holds the selected problem and the ticket message.
-class _CreateTicketScreenState extends State<CreateTicketScreen> {
+class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
   String? _topic;
   final TextEditingController _message = TextEditingController();
 
@@ -53,6 +55,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    final List<HelpTopic> topics =
+        ref.watch(helpTopicsProvider).value ?? const <HelpTopic>[];
+
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
       appBar: AppBar(
@@ -83,7 +88,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           const SizedBox(height: 12),
           KosplyDropdown(
             key: const Key('create-ticket-dropdown'),
-            items: PlaceholderHelp.topicTitles(),
+            items: <String>[for (final HelpTopic topic in topics) topic.title],
             value: _topic,
             hint: 'Pilih masalah umum',
             onChanged: (String value) {

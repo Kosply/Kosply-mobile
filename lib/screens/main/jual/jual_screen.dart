@@ -7,11 +7,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
 import '../../../models/account/account_mode.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
 import '../../../providers/account/account_mode_provider.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -106,12 +106,16 @@ class _JualScreenState extends ConsumerState<JualScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final Seller seller = PlaceholderCatalog.sellerById(JualScreen.sellerId);
-    final List<Product> listed = PlaceholderCatalog.productsBySeller(
-      JualScreen.sellerId,
-    );
+    final Seller? seller = ref.watch(sellerProvider(JualScreen.sellerId)).value;
+    final List<Product> listed =
+        ref.watch(sellerProductsProvider(JualScreen.sellerId)).value ??
+        const <Product>[];
     final List<Product> visible = _visible(listed);
     final bool isSeller = ref.watch(accountModeProvider) == AccountMode.seller;
+
+    if (seller == null) {
+      return Scaffold(backgroundColor: KosplyColors.backgroundOf(context));
+    }
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),

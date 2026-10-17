@@ -1,12 +1,24 @@
 /// @title AI chat provider
-/// @notice Holds the Home AI overlay, active thread, and placeholder history.
+/// @notice Holds the Home AI overlay, active thread, and cached history.
+/// @dev The overlay stays optimistic in memory while every appended exchange
+/// is persisted through the {AiChatRepository}; the history hydrates from the
+/// cache when the provider is first read.
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/database/providers/database_provider.dart';
+import '../../data/chat/ai_chat_repository.dart';
 import '../../data/chat/placeholder_ai_chat.dart';
 import '../../models/chat/ai_thread.dart';
+
+/// @dev Home AI repository backed by the Drift cache.
+final aiChatRepositoryProvider = Provider<AiChatRepository>(
+  (ref) => AiChatRepository(dao: ref.watch(appDatabaseProvider).aiChatDao),
+);
 
 /// @title AiPanelKind
 /// @notice Which overlay sits above the AI composer.
@@ -92,16 +104,33 @@ class AiChatState {
 }
 
 /// @title AiChatNotifier
-/// @notice Mutates the in-memory Home AI overlay.
+/// @notice Mutates the Home AI overlay and persists appended exchanges.
 class AiChatNotifier extends Notifier<AiChatState> {
   int _seq = 0;
   int _reply = 0;
 
-  /// @notice Starts with the placeholder history and a collapsed circle.
+  /// @notice Starts collapsed and hydrates the history from the cache.
   /// @return The initial {AiChatState}.
   @override
   AiChatState build() {
-    return AiChatState(threads: PlaceholderAiChat.threads());
+    unawaited(_hydrate());
+    return const AiChatState();
+  }
+
+  Future<void> _hydrate() async {
+    late final List<AiThread> threads;
+    try {
+      threads = await ref.read(aiChatRepositoryProvider).threadsOnce();
+    } catch (_) {
+      if (!ref.mounted) {
+        return;
+      }
+      rethrow;
+    }
+    if (!ref.mounted) {
+      return;
+    }
+    state = state.copyWith(threads: threads);
   }
 
   /// @notice Expands the circle into the search-width composer.
@@ -213,6 +242,7 @@ class AiChatNotifier extends Notifier<AiChatState> {
       activeThreadId: id,
       threads: <AiThread>[thread, ...state.threads],
     );
+    unawaited(ref.read(aiChatRepositoryProvider).persistThread(thread));
   }
 
   void _append(AiThread current, String prompt, String reply) {
@@ -238,6 +268,7 @@ class AiChatNotifier extends Notifier<AiChatState> {
       activeThreadId: next.id,
       threads: threads,
     );
+    unawaited(ref.read(aiChatRepositoryProvider).persistThread(next));
   }
 }
 

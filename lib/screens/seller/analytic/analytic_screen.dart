@@ -4,10 +4,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/catalog/placeholder_catalog.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/product/grid/product_grid.dart';
 import '../../../widgets/common/headings/section_heading.dart';
@@ -16,7 +17,7 @@ import '../../main/home/see_all_screen.dart';
 
 /// @title AnalyticScreen
 /// @notice Analytic destination opened from Settings or Jual.
-class AnalyticScreen extends StatelessWidget {
+class AnalyticScreen extends ConsumerWidget {
   /// @notice Creates the analytic screen.
   /// @return A new {AnalyticScreen} instance.
   const AnalyticScreen({super.key});
@@ -48,18 +49,28 @@ class AnalyticScreen extends StatelessWidget {
 
   /// @notice Builds the metric grid and catalogue sections.
   /// @param context The build context.
+  /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
-  Widget build(BuildContext context) {
-    final Seller seller = PlaceholderCatalog.sellerById(sellerId);
-    final List<Product> listed = PlaceholderCatalog.productsBySeller(sellerId);
-    final List<Product> all = PlaceholderCatalog.all();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Seller? seller = ref.watch(sellerProvider(sellerId)).value;
+    final List<Product> listed =
+        ref.watch(sellerProductsProvider(sellerId)).value ?? const <Product>[];
+    final List<Product> all =
+        ref.watch(catalogProductsProvider).value ?? const <Product>[];
     final List<Product> trading = listed.isEmpty
         ? all.take(4).toList()
         : listed.take(4).toList();
     final List<Product> popular = all.take(4).toList();
     final List<Product> lowStock = all.skip(4).take(4).toList();
     final List<Product> recent = all.reversed.take(4).toList();
+
+    if (seller == null) {
+      return Scaffold(
+        backgroundColor: KosplyColors.backgroundOf(context),
+        appBar: AppBar(backgroundColor: KosplyColors.backgroundOf(context)),
+      );
+    }
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),

@@ -9,7 +9,17 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/database/app_database.dart';
+import 'core/database/providers/database_provider.dart';
+import 'core/storage/providers/storage_providers.dart';
+import 'core/storage/stores/preferences_store.dart';
+import 'core/storage/stores/secure_store.dart';
+import 'data/account/session_repository.dart';
+import 'data/shared/app_seeder.dart';
 import 'layouts/main_layout.dart';
+import 'models/auth/auth_session.dart';
+import 'providers/account/session_provider.dart';
+import 'providers/seed/app_seeder_provider.dart';
 import 'providers/settings/theme_mode_provider.dart';
 import 'screens/seller/product/add_product_screen.dart';
 import 'screens/settings/app/app_setting_screen.dart';
@@ -35,10 +45,35 @@ import 'screens/auth/onboarding/splash_screen.dart';
 import 'theme/app/kosply_theme.dart';
 
 /// @notice Starts the Flutter application.
-/// @dev Wraps the app in a Riverpod {ProviderScope}.
-/// @return void
-void main() {
-  runApp(const ProviderScope(child: MyApp()));
+/// @dev Opens the platform stores and database, restores the session from the
+/// keystore, fills the offline-first cache, then runs the app inside an
+/// {UncontrolledProviderScope} so the first frame already has data.
+/// @return Future completing when the app is running.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final SecureStore secureStore = SecureStore();
+  final AuthSession? session = await SessionRepository(
+    secure: secureStore,
+  ).restore();
+  final ProviderContainer container = ProviderContainer(
+    overrides: [
+      preferencesStoreProvider.overrideWithValue(
+        await PreferencesStore.open(),
+      ),
+      secureStoreProvider.overrideWithValue(secureStore),
+      appDatabaseProvider.overrideWithValue(
+        AppDatabase(AppDatabase.openDefault()),
+      ),
+      sessionProvider.overrideWith(
+        () => SessionNotifier(initial: session),
+      ),
+    ],
+  );
+  final AppSeeder seeder = container.read(appSeederProvider);
+  await seeder.seedIfEmpty();
+  runApp(
+    UncontrolledProviderScope(container: container, child: const MyApp()),
+  );
 }
 
 /// @title MyApp
@@ -74,6 +109,8 @@ class MyApp extends ConsumerWidget {
         SplashScreen.routeName: (_) => const SplashScreen(),
         RegisterScreen.routeName: (_) => const RegisterScreen(),
         RegisterEmailScreen.routeName: (_) => const RegisterEmailScreen(),
+        RegisterEmailScreen.googleRouteName: (_) =>
+            const RegisterEmailScreen(googleFlow: true),
         LoginScreen.routeName: (_) => const LoginScreen(),
         ForgotPasswordScreen.routeName: (_) => const ForgotPasswordScreen(),
         InterestScreen.routeName: (_) => const InterestScreen(),

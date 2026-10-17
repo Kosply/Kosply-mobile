@@ -54,9 +54,9 @@ class ForgotPasswordScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return SteppedForm(
       steps: steps,
-      onCompleted: () => Navigator.of(
-        context,
-      ).pushReplacementNamed(KosplyMainLayout.routeName),
+      onCompleted: (List<String> values) =>
+          Navigator.of(context)
+              .pushReplacementNamed(KosplyMainLayout.routeName),
     );
   }
 }

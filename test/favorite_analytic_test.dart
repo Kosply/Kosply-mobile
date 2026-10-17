@@ -14,6 +14,8 @@ import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 import 'package:kosply_mobile/widgets/seller/appbar/seller_app_bar.dart';
 
+import 'helpers/kosply_test_app.dart';
+
 void _setPhone(WidgetTester tester) {
   tester.view.physicalSize = const Size(1170, 2100);
   tester.view.devicePixelRatio = 3.0;
@@ -28,10 +30,7 @@ void main() {
   ) async {
     _setPhone(tester);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: FavoriteScreen())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const FavoriteScreen());
 
     expect(find.text('Favorite'), findsWidgets);
     expect(find.text('Cari favorite...'), findsOneWidget);
@@ -46,20 +45,17 @@ void main() {
   ) async {
     _setPhone(tester);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: const ProductViewScreen(productId: 'product-0'),
-          routes: <String, WidgetBuilder>{
-            FavoriteScreen.routeName: (_) => const FavoriteScreen(),
-          },
-        ),
-      ),
+    await pumpKosplyApp(
+      tester,
+      const ProductViewScreen(productId: 'product-0'),
+      routes: <String, WidgetBuilder>{
+        FavoriteScreen.routeName: (_) => const FavoriteScreen(),
+      },
     );
-    await tester.pump();
 
     await tester.tap(find.byKey(const Key('product-favorite')));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
 
     FavoriteScreen.push(tester.element(find.byType(ProductViewScreen)));
     await tester.pumpAndSettle();
@@ -87,17 +83,15 @@ void main() {
   ) async {
     _setPhone(tester);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: FavoriteScreen())),
+    final ProviderContainer container = await pumpKosplyApp(
+      tester,
+      const FavoriteScreen(),
     );
-    await tester.pump();
 
-    final ProviderContainer container = ProviderScope.containerOf(
-      tester.element(find.byType(FavoriteScreen)),
-    );
     container.read(favoritesProvider.notifier).toggle('product-0');
     container.read(favoritesProvider.notifier).toggle('product-1');
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
 
     expect(find.text('Meja belajar lipat'), findsOneWidget);
     expect(find.text('Kipas angin meja'), findsOneWidget);
@@ -124,8 +118,7 @@ void main() {
     (WidgetTester tester) async {
       _setPhone(tester);
 
-      await tester.pumpWidget(const MaterialApp(home: AnalyticScreen()));
-      await tester.pump();
+      await pumpKosplyApp(tester, const AnalyticScreen());
 
       expect(find.byType(SellerAppBar), findsOneWidget);
       expect(find.text('seller1'), findsOneWidget);
@@ -165,8 +158,7 @@ void main() {
   ) async {
     _setPhone(tester);
 
-    await tester.pumpWidget(const MaterialApp(home: AddProductScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const AddProductScreen());
 
     expect(find.text('Tambah barang'), findsOneWidget);
     expect(find.text('Nama barang'), findsOneWidget);

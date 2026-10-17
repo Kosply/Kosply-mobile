@@ -45,9 +45,18 @@ class Seller {
       id: 'seller-${slot + 1}',
       name: 'seller${slot + 1}',
       avatarPath: avatar,
-      activeLabel: 'aktif ${(slot * 11) + 5} menit lalu',
+      activeLabel: 'aktif ${placeholderActiveMinutes(index)} menit lalu',
       bio: loremIpsum,
     );
+  }
+
+  /// @notice Minutes-ago behind the placeholder activity label.
+  /// @dev Shared by the placeholder model and the cache seed so both agree.
+  /// @param index Zero-based seller slot, wrapped across [count].
+  /// @return Minutes since the placeholder seller was last active.
+  static int placeholderActiveMinutes(int index) {
+    final int slot = index % count;
+    return (slot * 11) + 5;
   }
 
   /// @dev Number of placeholder sellers.

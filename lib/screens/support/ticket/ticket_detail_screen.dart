@@ -4,10 +4,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/support/placeholder_help.dart';
-import '../../../models/chat/conversation.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../models/chat/conversation.dart';
+import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/seller/appbar/seller_app_bar.dart';
@@ -15,7 +16,7 @@ import '../../../widgets/seller/identity/seller_avatar.dart';
 
 /// @title TicketDetailScreen
 /// @notice One ticket opened from Contact support.
-class TicketDetailScreen extends StatelessWidget {
+class TicketDetailScreen extends ConsumerWidget {
   /// @notice Creates the ticket screen.
   /// @param ticketId Identifier of the ticket to show.
   /// @return A new {TicketDetailScreen} instance.
@@ -37,11 +38,14 @@ class TicketDetailScreen extends StatelessWidget {
 
   /// @notice Builds the thread.
   /// @param context The build context.
+  /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
-  Widget build(BuildContext context) {
-    final Seller agent = PlaceholderHelp.agent;
-    final List<ChatMessage> messages = PlaceholderHelp.messagesFor(ticketId);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Seller agent = ref.watch(supportRepositoryProvider).agent;
+    final List<ChatMessage> messages =
+        ref.watch(ticketMessagesProvider(ticketId)).value ??
+        const <ChatMessage>[];
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
