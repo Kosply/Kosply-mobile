@@ -7,10 +7,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/product_view_screen.dart';
-import 'package:kosply_mobile/screens/seller_detail_screen.dart';
-import 'package:kosply_mobile/widgets/product_grid.dart';
-import 'package:kosply_mobile/widgets/seller_identity.dart';
+import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
+import 'package:kosply_mobile/screens/seller/detail/seller_detail_screen.dart';
+import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
+import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
 
 /// @notice Seller detail behaviour checks.
 /// @return void

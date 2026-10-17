@@ -6,10 +6,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/contact_support_screen.dart';
-import 'package:kosply_mobile/screens/create_ticket_screen.dart';
-import 'package:kosply_mobile/screens/help_desk_screen.dart';
-import 'package:kosply_mobile/screens/ticket_detail_screen.dart';
+import 'package:kosply_mobile/screens/support/contact/contact_support_screen.dart';
+import 'package:kosply_mobile/screens/support/ticket/create_ticket_screen.dart';
+import 'package:kosply_mobile/screens/support/help/help_desk_screen.dart';
+import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
 
 /// @notice Support behaviour checks.
 /// @return void

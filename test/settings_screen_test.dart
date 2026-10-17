@@ -7,19 +7,19 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/providers/theme_mode_provider.dart';
-import 'package:kosply_mobile/screens/analytic_screen.dart';
-import 'package:kosply_mobile/screens/app_setting_screen.dart';
-import 'package:kosply_mobile/screens/contact_support_screen.dart';
-import 'package:kosply_mobile/screens/favorite_screen.dart';
-import 'package:kosply_mobile/screens/forgot_password_screen.dart';
-import 'package:kosply_mobile/screens/help_desk_screen.dart';
-import 'package:kosply_mobile/screens/profile_setting_screen.dart';
-import 'package:kosply_mobile/screens/register_screen.dart';
-import 'package:kosply_mobile/screens/settings_screen.dart';
-import 'package:kosply_mobile/screens/splash_screen.dart';
-import 'package:kosply_mobile/theme/kosply_theme.dart';
-import 'package:kosply_mobile/widgets/settings_section_card.dart';
+import 'package:kosply_mobile/providers/settings/theme_mode_provider.dart';
+import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
+import 'package:kosply_mobile/screens/settings/app/app_setting_screen.dart';
+import 'package:kosply_mobile/screens/support/contact/contact_support_screen.dart';
+import 'package:kosply_mobile/screens/main/favorite/favorite_screen.dart';
+import 'package:kosply_mobile/screens/auth/forgot_password/forgot_password_screen.dart';
+import 'package:kosply_mobile/screens/support/help/help_desk_screen.dart';
+import 'package:kosply_mobile/screens/settings/profile/profile_setting_screen.dart';
+import 'package:kosply_mobile/screens/auth/register/register_screen.dart';
+import 'package:kosply_mobile/screens/settings/hub/settings_screen.dart';
+import 'package:kosply_mobile/screens/auth/onboarding/splash_screen.dart';
+import 'package:kosply_mobile/theme/app/kosply_theme.dart';
+import 'package:kosply_mobile/widgets/settings/card/settings_section_card.dart';
 
 /// @notice Wraps [child] with Riverpod and the app themes.
 /// @param child Widget under test.

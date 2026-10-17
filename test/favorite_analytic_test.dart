@@ -6,13 +6,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/providers/favorites_provider.dart';
-import 'package:kosply_mobile/screens/add_product_screen.dart';
-import 'package:kosply_mobile/screens/analytic_screen.dart';
-import 'package:kosply_mobile/screens/favorite_screen.dart';
-import 'package:kosply_mobile/screens/product_view_screen.dart';
-import 'package:kosply_mobile/widgets/product_grid.dart';
-import 'package:kosply_mobile/widgets/seller_app_bar.dart';
+import 'package:kosply_mobile/providers/catalog/favorites_provider.dart';
+import 'package:kosply_mobile/screens/seller/product/add_product_screen.dart';
+import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
+import 'package:kosply_mobile/screens/main/favorite/favorite_screen.dart';
+import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
+import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
+import 'package:kosply_mobile/widgets/seller/appbar/seller_app_bar.dart';
 
 void _setPhone(WidgetTester tester) {
   tester.view.physicalSize = const Size(1170, 2100);

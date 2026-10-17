@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/account_mode.dart';
-import '../models/user_profile.dart';
-import '../providers/account_mode_provider.dart';
-import '../providers/navigation_provider.dart';
-import '../providers/profile_provider.dart';
-import '../screens/home_screen.dart';
-import '../screens/inbox_screen.dart';
-import '../screens/jual_screen.dart';
-import '../screens/profile_setting_screen.dart';
-import '../screens/search_screen.dart';
-import '../screens/settings_screen.dart';
-import '../theme/kosply_colors.dart';
-import '../widgets/kosply_wordmark.dart';
-import '../widgets/phosphor_icons.dart';
-import '../widgets/seller_avatar.dart';
+import '../models/account/account_mode.dart';
+import '../models/account/user_profile.dart';
+import '../providers/account/account_mode_provider.dart';
+import '../providers/navigation/navigation_provider.dart';
+import '../providers/account/profile_provider.dart';
+import '../screens/main/home/home_screen.dart';
+import '../screens/main/inbox/inbox_screen.dart';
+import '../screens/main/jual/jual_screen.dart';
+import '../screens/settings/profile/profile_setting_screen.dart';
+import '../screens/main/search/search_screen.dart';
+import '../screens/settings/hub/settings_screen.dart';
+import '../theme/colors/kosply_colors.dart';
+import '../widgets/common/brand/kosply_wordmark.dart';
+import '../widgets/common/icons/phosphor_icons.dart';
+import '../widgets/seller/identity/seller_avatar.dart';
 
 /// @title KosplyMainLayout
 /// @notice Nested home shell with the bottom-navigation destinations.

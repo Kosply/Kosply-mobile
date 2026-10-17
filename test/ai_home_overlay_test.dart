@@ -7,9 +7,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/home_screen.dart';
-import 'package:kosply_mobile/screens/search_screen.dart';
-import 'package:kosply_mobile/widgets/searchbar.dart';
+import 'package:kosply_mobile/screens/main/home/home_screen.dart';
+import 'package:kosply_mobile/screens/main/search/search_screen.dart';
+import 'package:kosply_mobile/widgets/common/search/searchbar.dart';
 
 void _setPhone(WidgetTester tester) {
   tester.view.physicalSize = const Size(1170, 2100);

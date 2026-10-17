@@ -6,8 +6,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/product_view_screen.dart';
-import 'package:kosply_mobile/widgets/seller_identity.dart';
+import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
+import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
 
 /// @notice Product detail layout checks.
 /// @return void

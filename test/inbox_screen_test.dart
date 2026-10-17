@@ -6,8 +6,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/chat_detail_screen.dart';
-import 'package:kosply_mobile/screens/inbox_screen.dart';
+import 'package:kosply_mobile/screens/main/inbox/chat_detail_screen.dart';
+import 'package:kosply_mobile/screens/main/inbox/inbox_screen.dart';
 
 /// @notice Inbox and chat behaviour checks.
 /// @return void
