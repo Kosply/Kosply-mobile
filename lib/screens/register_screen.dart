@@ -116,12 +116,11 @@ class RegisterScreen extends StatelessWidget {
                     asset: 'assets/images/google.png',
                     onTap: () => _openHome(context),
                   ),
-                  const SizedBox(height: 12),
-                  SocialSignInButton(
-                    label: 'Continue with Apple',
-                    asset: 'assets/images/apple.png',
-                    onTap: () => _openHome(context),
-                  ),
+                  // SocialSignInButton(
+                  //   label: 'Continue with Apple',
+                  //   asset: 'assets/images/apple.png',
+                  //   onTap: () => _openHome(context),
+                  // ),
                   const SizedBox(height: 12),
                   const Text(
                     'or',
