@@ -6,7 +6,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kosply_mobile/main.dart';
-import 'package:kosply_mobile/screens/register_screen.dart';
+import 'package:kosply_mobile/screens/auth/register/register_screen.dart';
 
 /// @notice Smoke test suite.
 /// @dev Pumps past the splash delay so no timer stays pending.

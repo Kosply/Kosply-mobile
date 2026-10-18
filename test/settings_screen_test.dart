@@ -7,44 +7,44 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/providers/theme_mode_provider.dart';
-import 'package:kosply_mobile/screens/analytic_screen.dart';
-import 'package:kosply_mobile/screens/app_setting_screen.dart';
-import 'package:kosply_mobile/screens/contact_support_screen.dart';
-import 'package:kosply_mobile/screens/favorite_screen.dart';
-import 'package:kosply_mobile/screens/forgot_password_screen.dart';
-import 'package:kosply_mobile/screens/help_desk_screen.dart';
-import 'package:kosply_mobile/screens/profile_setting_screen.dart';
-import 'package:kosply_mobile/screens/register_screen.dart';
-import 'package:kosply_mobile/screens/settings_screen.dart';
-import 'package:kosply_mobile/screens/splash_screen.dart';
-import 'package:kosply_mobile/theme/kosply_theme.dart';
-import 'package:kosply_mobile/widgets/settings_section_card.dart';
+import 'package:kosply_mobile/providers/settings/theme_mode_provider.dart';
+import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
+import 'package:kosply_mobile/screens/settings/app/app_setting_screen.dart';
+import 'package:kosply_mobile/screens/support/contact/contact_support_screen.dart';
+import 'package:kosply_mobile/screens/main/favorite/favorite_screen.dart';
+import 'package:kosply_mobile/screens/auth/forgot_password/forgot_password_screen.dart';
+import 'package:kosply_mobile/screens/support/help/help_desk_screen.dart';
+import 'package:kosply_mobile/screens/settings/profile/profile_setting_screen.dart';
+import 'package:kosply_mobile/screens/auth/register/register_screen.dart';
+import 'package:kosply_mobile/screens/settings/hub/settings_screen.dart';
+import 'package:kosply_mobile/screens/auth/onboarding/splash_screen.dart';
+import 'package:kosply_mobile/theme/app/kosply_theme.dart';
+import 'package:kosply_mobile/widgets/settings/card/settings_section_card.dart';
 
-/// @notice Wraps [child] with Riverpod and the app themes.
-/// @param child Widget under test.
+import 'helpers/kosply_test_app.dart';
+
+/// @notice Wraps [home] with the app themes and the settings routes.
+/// @param home Screen under test.
 /// @return The test app.
-Widget _wrap(Widget child) {
-  return ProviderScope(
-    child: Consumer(
-      builder: (BuildContext context, WidgetRef ref, Widget? _) {
-        return MaterialApp(
-          theme: KosplyTheme.light,
-          darkTheme: KosplyTheme.dark,
-          themeMode: ref.watch(themeModeProvider),
-          home: child,
-          routes: <String, WidgetBuilder>{
-            HelpDeskScreen.routeName: (_) => const HelpDeskScreen(),
-            ContactSupportScreen.routeName: (_) => const ContactSupportScreen(),
-            FavoriteScreen.routeName: (_) => const FavoriteScreen(),
-            AnalyticScreen.routeName: (_) => const AnalyticScreen(),
-            ForgotPasswordScreen.routeName: (_) => const ForgotPasswordScreen(),
-            SplashScreen.routeName: (_) => const SplashScreen(),
-            RegisterScreen.routeName: (_) => const RegisterScreen(),
-          },
-        );
-      },
-    ),
+Widget _app(Widget home) {
+  return Consumer(
+    builder: (BuildContext context, WidgetRef ref, Widget? _) {
+      return MaterialApp(
+        theme: KosplyTheme.light,
+        darkTheme: KosplyTheme.dark,
+        themeMode: ref.watch(themeModeProvider),
+        home: home,
+        routes: <String, WidgetBuilder>{
+          HelpDeskScreen.routeName: (_) => const HelpDeskScreen(),
+          ContactSupportScreen.routeName: (_) => const ContactSupportScreen(),
+          FavoriteScreen.routeName: (_) => const FavoriteScreen(),
+          AnalyticScreen.routeName: (_) => const AnalyticScreen(),
+          ForgotPasswordScreen.routeName: (_) => const ForgotPasswordScreen(),
+          SplashScreen.routeName: (_) => const SplashScreen(),
+          RegisterScreen.routeName: (_) => const RegisterScreen(),
+        },
+      );
+    },
   );
 }
 
@@ -58,8 +58,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     expect(find.text('Setting'), findsOneWidget);
     expect(find.text('Pembeli'), findsOneWidget);
@@ -86,8 +85,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     expect(find.textContaining('Mode pembeli'), findsOneWidget);
 
@@ -105,8 +103,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     expect(
       Theme.of(tester.element(find.byType(SettingsScreen))).brightness,
@@ -129,8 +126,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.tap(find.text('Profile setting'));
     await tester.pumpAndSettle();
@@ -149,8 +145,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.tap(find.text('Penjual'));
     await tester.pump();
@@ -168,8 +163,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('setting'));
     await tester.pumpAndSettle();
@@ -203,8 +197,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('setting'));
     await tester.pumpAndSettle();
@@ -224,8 +217,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('setting'));
     await tester.pumpAndSettle();
@@ -266,8 +258,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('setting'));
     await tester.pumpAndSettle();
@@ -289,8 +280,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('setting'));
     await tester.pumpAndSettle();
@@ -315,8 +305,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('Favorite'));
     await tester.pumpAndSettle();
@@ -335,8 +324,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.tap(find.text('Penjual'));
     await tester.pump();
@@ -357,8 +345,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.tap(find.text('Help desk'));
     await tester.pumpAndSettle();
@@ -374,8 +361,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(_wrap(const SettingsScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     await tester.ensureVisible(find.text('Contact support'));
     await tester.pumpAndSettle();

@@ -8,35 +8,37 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/data/placeholder_catalog.dart';
+import 'package:kosply_mobile/data/catalog/placeholder_catalog.dart';
 import 'package:kosply_mobile/layouts/main_layout.dart';
 import 'package:kosply_mobile/main.dart';
-import 'package:kosply_mobile/screens/forgot_password_screen.dart';
-import 'package:kosply_mobile/screens/home_screen.dart';
-import 'package:kosply_mobile/screens/interest_screen.dart';
-import 'package:kosply_mobile/screens/login_screen.dart';
-import 'package:kosply_mobile/screens/product_view_screen.dart';
-import 'package:kosply_mobile/screens/profile_setting_screen.dart';
-import 'package:kosply_mobile/screens/register_email_screen.dart';
-import 'package:kosply_mobile/screens/register_screen.dart';
-import 'package:kosply_mobile/screens/add_product_screen.dart';
-import 'package:kosply_mobile/screens/app_setting_screen.dart';
-import 'package:kosply_mobile/screens/analytic_screen.dart';
-import 'package:kosply_mobile/screens/chat_detail_screen.dart';
-import 'package:kosply_mobile/screens/favorite_screen.dart';
-import 'package:kosply_mobile/screens/contact_support_screen.dart';
-import 'package:kosply_mobile/screens/create_ticket_screen.dart';
-import 'package:kosply_mobile/screens/help_desk_screen.dart';
-import 'package:kosply_mobile/screens/inbox_screen.dart';
-import 'package:kosply_mobile/screens/jual_screen.dart';
-import 'package:kosply_mobile/screens/search_screen.dart';
-import 'package:kosply_mobile/screens/see_all_screen.dart';
-import 'package:kosply_mobile/screens/seller_detail_screen.dart';
-import 'package:kosply_mobile/screens/settings_screen.dart';
-import 'package:kosply_mobile/screens/splash_screen.dart';
-import 'package:kosply_mobile/screens/ticket_detail_screen.dart';
-import 'package:kosply_mobile/widgets/kosply_wordmark.dart';
-import 'package:kosply_mobile/widgets/product_grid.dart';
+import 'package:kosply_mobile/screens/auth/forgot_password/forgot_password_screen.dart';
+import 'package:kosply_mobile/screens/main/home/home_screen.dart';
+import 'package:kosply_mobile/screens/auth/onboarding/interest_screen.dart';
+import 'package:kosply_mobile/screens/auth/login/login_screen.dart';
+import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
+import 'package:kosply_mobile/screens/settings/profile/profile_setting_screen.dart';
+import 'package:kosply_mobile/screens/auth/register/register_email_screen.dart';
+import 'package:kosply_mobile/screens/auth/register/register_screen.dart';
+import 'package:kosply_mobile/screens/seller/product/add_product_screen.dart';
+import 'package:kosply_mobile/screens/settings/app/app_setting_screen.dart';
+import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
+import 'package:kosply_mobile/screens/main/inbox/chat_detail_screen.dart';
+import 'package:kosply_mobile/screens/main/favorite/favorite_screen.dart';
+import 'package:kosply_mobile/screens/support/contact/contact_support_screen.dart';
+import 'package:kosply_mobile/screens/support/ticket/create_ticket_screen.dart';
+import 'package:kosply_mobile/screens/support/help/help_desk_screen.dart';
+import 'package:kosply_mobile/screens/main/inbox/inbox_screen.dart';
+import 'package:kosply_mobile/screens/main/jual/jual_screen.dart';
+import 'package:kosply_mobile/screens/main/search/search_screen.dart';
+import 'package:kosply_mobile/screens/main/home/see_all_screen.dart';
+import 'package:kosply_mobile/screens/seller/detail/seller_detail_screen.dart';
+import 'package:kosply_mobile/screens/settings/hub/settings_screen.dart';
+import 'package:kosply_mobile/screens/auth/onboarding/splash_screen.dart';
+import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
+import 'package:kosply_mobile/widgets/common/brand/kosply_wordmark.dart';
+import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
+
+import 'helpers/kosply_test_app.dart';
 
 /// @notice Screen-by-screen render checks.
 /// @return void
@@ -77,10 +79,7 @@ void main() {
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(
-        ProviderScope(child: MaterialApp(home: entry.value)),
-      );
-      await tester.pump();
+      await pumpKosplyApp(tester, entry.value);
 
       expect(tester.takeException(), isNull);
     });
@@ -111,10 +110,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: HomeScreen())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const HomeScreen());
 
     expect(find.byType(ProductGrid), findsWidgets);
     expect(find.byKey(const Key('ai-fab')), findsOneWidget);
@@ -128,10 +124,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: KosplyMainLayout())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const KosplyMainLayout());
 
     expect(find.byType(KosplyMark), findsOneWidget);
     expect(find.byType(BackButton), findsNothing);
@@ -185,10 +178,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: SettingsScreen())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const SettingsScreen());
 
     expect(find.byType(SettingsScreen), findsOneWidget);
     expect(tester.takeException(), isNull);

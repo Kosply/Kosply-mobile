@@ -4,10 +4,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/product_view_screen.dart';
-import 'package:kosply_mobile/widgets/seller_identity.dart';
+import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
+import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
+
+import 'helpers/kosply_test_app.dart';
 
 /// @notice Product detail layout checks.
 /// @return void
@@ -17,12 +18,10 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: ProductViewScreen(productId: 'product-0')),
-      ),
+    await pumpKosplyApp(
+      tester,
+      const ProductViewScreen(productId: 'product-0'),
     );
-    await tester.pump();
   }
 
   testWidgets('product detail shows title, seller, info and chat bar', (

@@ -5,11 +5,12 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/home_screen.dart';
-import 'package:kosply_mobile/screens/search_screen.dart';
-import 'package:kosply_mobile/widgets/searchbar.dart';
+import 'package:kosply_mobile/screens/main/home/home_screen.dart';
+import 'package:kosply_mobile/screens/main/search/search_screen.dart';
+import 'package:kosply_mobile/widgets/common/search/searchbar.dart';
+
+import 'helpers/kosply_test_app.dart';
 
 void _setPhone(WidgetTester tester) {
   tester.view.physicalSize = const Size(1170, 2100);
@@ -19,9 +20,7 @@ void _setPhone(WidgetTester tester) {
 
 Future<void> _pumpHome(WidgetTester tester) async {
   _setPhone(tester);
-  await tester.pumpWidget(
-    const ProviderScope(child: MaterialApp(home: HomeScreen())),
-  );
+  await pumpKosplyApp(tester, const HomeScreen());
   await tester.pump();
 }
 
@@ -217,10 +216,7 @@ void main() {
     WidgetTester tester,
   ) async {
     _setPhone(tester);
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: SearchScreen())),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const SearchScreen());
 
     expect(find.byKey(const Key('ai-fab')), findsNothing);
     expect(find.byKey(const Key('ai-composer')), findsNothing);

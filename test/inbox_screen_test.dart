@@ -6,8 +6,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/chat_detail_screen.dart';
-import 'package:kosply_mobile/screens/inbox_screen.dart';
+import 'package:kosply_mobile/screens/main/inbox/chat_detail_screen.dart';
+import 'package:kosply_mobile/screens/main/inbox/inbox_screen.dart';
+
+import 'helpers/kosply_test_app.dart';
 
 /// @notice Inbox and chat behaviour checks.
 /// @return void
@@ -17,21 +19,19 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: const InboxScreen(),
-        onGenerateRoute: (RouteSettings settings) {
-          if (settings.name == ChatDetailScreen.routeName) {
-            return MaterialPageRoute<void>(
-              builder: (_) =>
-                  ChatDetailScreen(sellerId: settings.arguments! as String),
-            );
-          }
-          return null;
-        },
-      ),
+    await pumpKosplyApp(
+      tester,
+      const InboxScreen(),
+      onGenerateRoute: (RouteSettings settings) {
+        if (settings.name == ChatDetailScreen.routeName) {
+          return MaterialPageRoute<void>(
+            builder: (_) =>
+                ChatDetailScreen(sellerId: settings.arguments! as String),
+          );
+        }
+        return null;
+      },
     );
-    await tester.pump();
   }
 
   testWidgets('inbox shows search, category chips and conversation rows', (
@@ -112,10 +112,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      const MaterialApp(home: ChatDetailScreen(sellerId: 'seller-2')),
-    );
-    await tester.pump();
+    await pumpKosplyApp(tester, const ChatDetailScreen(sellerId: 'seller-2'));
 
     expect(find.text('seller2'), findsOneWidget);
     expect(find.text('aktif 16 menit lalu'), findsOneWidget);

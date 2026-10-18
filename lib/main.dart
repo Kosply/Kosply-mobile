@@ -9,36 +9,71 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/database/app_database.dart';
+import 'core/database/providers/database_provider.dart';
+import 'core/storage/providers/storage_providers.dart';
+import 'core/storage/stores/preferences_store.dart';
+import 'core/storage/stores/secure_store.dart';
+import 'data/account/session_repository.dart';
+import 'data/shared/app_seeder.dart';
 import 'layouts/main_layout.dart';
-import 'providers/theme_mode_provider.dart';
-import 'screens/add_product_screen.dart';
-import 'screens/app_setting_screen.dart';
-import 'screens/analytic_screen.dart';
-import 'screens/chat_detail_screen.dart';
-import 'screens/contact_support_screen.dart';
-import 'screens/create_ticket_screen.dart';
-import 'screens/favorite_screen.dart';
-import 'screens/help_desk_screen.dart';
-import 'screens/forgot_password_screen.dart';
-import 'screens/interest_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/product_view_screen.dart';
-import 'screens/profile_setting_screen.dart';
-import 'screens/register_email_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/see_all_screen.dart';
-import 'screens/seller_detail_screen.dart';
-import 'screens/setting_detail_screen.dart';
-import 'screens/settings_screen.dart';
-import 'screens/ticket_detail_screen.dart';
-import 'screens/splash_screen.dart';
-import 'theme/kosply_theme.dart';
+import 'models/auth/auth_session.dart';
+import 'providers/account/session_provider.dart';
+import 'providers/seed/app_seeder_provider.dart';
+import 'providers/settings/theme_mode_provider.dart';
+import 'screens/seller/product/add_product_screen.dart';
+import 'screens/settings/app/app_setting_screen.dart';
+import 'screens/seller/analytic/analytic_screen.dart';
+import 'screens/main/inbox/chat_detail_screen.dart';
+import 'screens/support/contact/contact_support_screen.dart';
+import 'screens/support/ticket/create_ticket_screen.dart';
+import 'screens/main/favorite/favorite_screen.dart';
+import 'screens/support/help/help_desk_screen.dart';
+import 'screens/auth/forgot_password/forgot_password_screen.dart';
+import 'screens/auth/onboarding/interest_screen.dart';
+import 'screens/auth/login/login_screen.dart';
+import 'screens/seller/product/product_view_screen.dart';
+import 'screens/settings/profile/profile_setting_screen.dart';
+import 'screens/auth/register/register_email_screen.dart';
+import 'screens/auth/register/register_screen.dart';
+import 'screens/main/home/see_all_screen.dart';
+import 'screens/seller/detail/seller_detail_screen.dart';
+import 'screens/settings/app/setting_detail_screen.dart';
+import 'screens/settings/hub/settings_screen.dart';
+import 'screens/support/ticket/ticket_detail_screen.dart';
+import 'screens/auth/onboarding/splash_screen.dart';
+import 'theme/app/kosply_theme.dart';
 
 /// @notice Starts the Flutter application.
-/// @dev Wraps the app in a Riverpod {ProviderScope}.
-/// @return void
-void main() {
-  runApp(const ProviderScope(child: MyApp()));
+/// @dev Opens the platform stores and database, restores the session from the
+/// keystore, fills the offline-first cache, then runs the app inside an
+/// {UncontrolledProviderScope} so the first frame already has data.
+/// @return Future completing when the app is running.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final SecureStore secureStore = SecureStore();
+  final AuthSession? session = await SessionRepository(
+    secure: secureStore,
+  ).restore();
+  final ProviderContainer container = ProviderContainer(
+    overrides: [
+      preferencesStoreProvider.overrideWithValue(
+        await PreferencesStore.open(),
+      ),
+      secureStoreProvider.overrideWithValue(secureStore),
+      appDatabaseProvider.overrideWithValue(
+        AppDatabase(AppDatabase.openDefault()),
+      ),
+      sessionProvider.overrideWith(
+        () => SessionNotifier(initial: session),
+      ),
+    ],
+  );
+  final AppSeeder seeder = container.read(appSeederProvider);
+  await seeder.seedIfEmpty();
+  runApp(
+    UncontrolledProviderScope(container: container, child: const MyApp()),
+  );
 }
 
 /// @title MyApp
@@ -74,6 +109,8 @@ class MyApp extends ConsumerWidget {
         SplashScreen.routeName: (_) => const SplashScreen(),
         RegisterScreen.routeName: (_) => const RegisterScreen(),
         RegisterEmailScreen.routeName: (_) => const RegisterEmailScreen(),
+        RegisterEmailScreen.googleRouteName: (_) =>
+            const RegisterEmailScreen(googleFlow: true),
         LoginScreen.routeName: (_) => const LoginScreen(),
         ForgotPasswordScreen.routeName: (_) => const ForgotPasswordScreen(),
         InterestScreen.routeName: (_) => const InterestScreen(),

@@ -6,10 +6,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/screens/contact_support_screen.dart';
-import 'package:kosply_mobile/screens/create_ticket_screen.dart';
-import 'package:kosply_mobile/screens/help_desk_screen.dart';
-import 'package:kosply_mobile/screens/ticket_detail_screen.dart';
+import 'package:kosply_mobile/screens/support/contact/contact_support_screen.dart';
+import 'package:kosply_mobile/screens/support/ticket/create_ticket_screen.dart';
+import 'package:kosply_mobile/screens/support/help/help_desk_screen.dart';
+import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
+
+import 'helpers/kosply_test_app.dart';
 
 /// @notice Support behaviour checks.
 /// @return void
@@ -24,8 +26,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await setView(tester);
-    await tester.pumpWidget(const MaterialApp(home: HelpDeskScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const HelpDeskScreen());
 
     expect(find.text('Help desk'), findsOneWidget);
     expect(find.text('Barang tidak sesuai deskripsi'), findsOneWidget);
@@ -61,24 +62,22 @@ void main() {
     WidgetTester tester,
   ) async {
     await setView(tester);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: const ContactSupportScreen(),
-        routes: <String, WidgetBuilder>{
-          CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
-        },
-        onGenerateRoute: (RouteSettings settings) {
-          if (settings.name == TicketDetailScreen.routeName) {
-            return MaterialPageRoute<void>(
-              builder: (_) =>
-                  TicketDetailScreen(ticketId: settings.arguments! as String),
-            );
-          }
-          return null;
-        },
-      ),
+    await pumpKosplyApp(
+      tester,
+      const ContactSupportScreen(),
+      routes: <String, WidgetBuilder>{
+        CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
+      },
+      onGenerateRoute: (RouteSettings settings) {
+        if (settings.name == TicketDetailScreen.routeName) {
+          return MaterialPageRoute<void>(
+            builder: (_) =>
+                TicketDetailScreen(ticketId: settings.arguments! as String),
+          );
+        }
+        return null;
+      },
     );
-    await tester.pump();
 
     expect(find.text('Contact support'), findsOneWidget);
     expect(find.text('Cari ticket...'), findsOneWidget);
@@ -95,8 +94,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await setView(tester);
-    await tester.pumpWidget(const MaterialApp(home: ContactSupportScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const ContactSupportScreen());
 
     await tester.tap(find.text('Close'));
     await tester.pump();
@@ -109,8 +107,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await setView(tester);
-    await tester.pumpWidget(const MaterialApp(home: ContactSupportScreen()));
-    await tester.pump();
+    await pumpKosplyApp(tester, const ContactSupportScreen());
 
     await tester.enterText(find.byKey(const Key('ticket-search')), 'penipuan');
     await tester.pump();
@@ -123,21 +120,19 @@ void main() {
     WidgetTester tester,
   ) async {
     await setView(tester);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: const ContactSupportScreen(),
-        onGenerateRoute: (RouteSettings settings) {
-          if (settings.name == TicketDetailScreen.routeName) {
-            return MaterialPageRoute<void>(
-              builder: (_) =>
-                  TicketDetailScreen(ticketId: settings.arguments! as String),
-            );
-          }
-          return null;
-        },
-      ),
+    await pumpKosplyApp(
+      tester,
+      const ContactSupportScreen(),
+      onGenerateRoute: (RouteSettings settings) {
+        if (settings.name == TicketDetailScreen.routeName) {
+          return MaterialPageRoute<void>(
+            builder: (_) =>
+                TicketDetailScreen(ticketId: settings.arguments! as String),
+          );
+        }
+        return null;
+      },
     );
-    await tester.pump();
 
     await tester.tap(find.byKey(const Key('ticket-ticket-1')));
     await tester.pumpAndSettle();
@@ -162,15 +157,13 @@ void main() {
     WidgetTester tester,
   ) async {
     await setView(tester);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: const ContactSupportScreen(),
-        routes: <String, WidgetBuilder>{
-          CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
-        },
-      ),
+    await pumpKosplyApp(
+      tester,
+      const ContactSupportScreen(),
+      routes: <String, WidgetBuilder>{
+        CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
+      },
     );
-    await tester.pump();
 
     await tester.tap(find.byKey(const Key('ticket-create')));
     await tester.pumpAndSettle();
