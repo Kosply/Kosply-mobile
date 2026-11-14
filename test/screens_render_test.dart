@@ -103,6 +103,23 @@ void main() {
     expect(find.byType(RegisterScreen), findsOneWidget);
   });
 
+  // @dev 360dp-wide phones (720px at 2x) used to clip every interest card.
+  for (final double scale in <double>[1.0, 1.3]) {
+    testWidgets('interest cards fit a 360dp phone at text scale $scale', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(720, 1604);
+      tester.view.devicePixelRatio = 2.0;
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await pumpKosplyApp(tester, const InterestScreen());
+
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('home screen renders cards without overflow', (
     WidgetTester tester,
   ) async {
