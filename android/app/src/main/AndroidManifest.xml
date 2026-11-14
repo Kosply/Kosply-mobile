@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app talks to the Kosply backend (catalogue, chat, uploads, AI). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="kosply_mobile"
         android:name="${applicationName}"
