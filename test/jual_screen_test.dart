@@ -7,14 +7,17 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kosply_mobile/core/camera/providers/camera_provider.dart';
 import 'package:kosply_mobile/models/account/account_mode.dart';
 import 'package:kosply_mobile/providers/account/account_mode_provider.dart';
 import 'package:kosply_mobile/screens/seller/product/add_product_screen.dart';
+import 'package:kosply_mobile/screens/seller/product/product_camera_screen.dart';
 import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
 import 'package:kosply_mobile/screens/main/jual/jual_screen.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
 
+import 'helpers/fake_listing_camera.dart';
 import 'helpers/kosply_test_app.dart';
 
 /// @notice Jual dashboard behaviour checks.
@@ -29,9 +32,15 @@ void main() {
       tester,
       const JualScreen(),
       routes: <String, WidgetBuilder>{
+        ProductCameraScreen.routeName: (_) => const ProductCameraScreen(),
         AddProductScreen.routeName: (_) => const AddProductScreen(),
         AnalyticScreen.routeName: (_) => const AnalyticScreen(),
       },
+      container: await seededContainer(
+        overrides: [
+          listingCameraFactoryProvider.overrideWithValue(FakeListingCamera.new),
+        ],
+      ),
     );
   }
 
@@ -86,18 +95,23 @@ void main() {
     expect(find.text('Trading product kamu'), findsOneWidget);
   });
 
-  testWidgets('plus button opens add product', (WidgetTester tester) async {
+  testWidgets('plus button opens the product camera and back returns', (
+    WidgetTester tester,
+  ) async {
     await pumpJual(tester);
 
     await tester.tap(find.byKey(const Key('jual-add')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AddProductScreen), findsOneWidget);
-    expect(find.text('Tambah barang'), findsOneWidget);
-    expect(find.text('Nama barang'), findsOneWidget);
-    expect(find.text('Deskripsi'), findsOneWidget);
-    expect(find.text('Kategori'), findsOneWidget);
-    expect(find.text('Pasang barang'), findsOneWidget);
+    expect(find.byType(ProductCameraScreen), findsOneWidget);
+    expect(find.text('Foto 0/5'), findsOneWidget);
+    expect(find.text('Lanjut'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const Key('product-camera-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProductCameraScreen), findsNothing);
+    expect(find.byType(JualScreen), findsOneWidget);
   });
 }

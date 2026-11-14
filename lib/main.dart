@@ -22,6 +22,7 @@ import 'providers/account/session_provider.dart';
 import 'providers/seed/app_seeder_provider.dart';
 import 'providers/settings/theme_mode_provider.dart';
 import 'screens/seller/product/add_product_screen.dart';
+import 'screens/seller/product/product_camera_screen.dart';
 import 'screens/settings/app/app_setting_screen.dart';
 import 'screens/seller/analytic/analytic_screen.dart';
 import 'screens/main/inbox/chat_detail_screen.dart';
@@ -118,6 +119,7 @@ class MyApp extends ConsumerWidget {
         SettingsScreen.routeName: (_) => const SettingsScreen(),
         ProfileSettingScreen.routeName: (_) => const ProfileSettingScreen(),
         AppSettingScreen.routeName: (_) => const AppSettingScreen(),
+        ProductCameraScreen.routeName: (_) => const ProductCameraScreen(),
         AddProductScreen.routeName: (_) => const AddProductScreen(),
         FavoriteScreen.routeName: (_) => const FavoriteScreen(),
         AnalyticScreen.routeName: (_) => const AnalyticScreen(),

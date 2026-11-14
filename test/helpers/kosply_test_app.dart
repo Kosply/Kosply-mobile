@@ -8,14 +8,18 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/providers/seed/app_seeder_provider.dart';
 
 /// @notice Creates a scope with every cache seeded.
 /// @dev Disposed automatically at test end.
+/// @param overrides Provider overrides, e.g. a fake camera.
 /// @return The ready {ProviderContainer}.
-Future<ProviderContainer> seededContainer() async {
-  final ProviderContainer container = ProviderContainer();
+Future<ProviderContainer> seededContainer({
+  List<Override> overrides = const <Override>[],
+}) async {
+  final ProviderContainer container = ProviderContainer(overrides: overrides);
   addTearDown(container.dispose);
   await container.read(appSeederProvider).seedIfEmpty();
   return container;

@@ -129,6 +129,21 @@ class PhosphorCode {
 
   /// @dev Stacked chats, used to open AI chat history.
   static const int chats = 0xe17c;
+
+  /// @dev Camera body, used when the camera cannot start.
+  static const int camera = 0xe10e;
+
+  /// @dev Camera with circling arrows, used to flip the lens.
+  static const int cameraRotate = 0xe7a4;
+
+  /// @dev Lightning bolt, flash on.
+  static const int lightning = 0xe2de;
+
+  /// @dev Struck-through lightning bolt, flash off.
+  static const int lightningSlash = 0xe2e0;
+
+  /// @dev Cross, used to remove a captured photo.
+  static const int x = 0xe4f6;
 }
 
 /// @title PhosphorGlyph

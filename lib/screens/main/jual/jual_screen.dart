@@ -19,7 +19,7 @@ import '../../../widgets/product/grid/product_grid.dart';
 import '../../../widgets/common/search/searchbar.dart';
 import '../../../widgets/seller/identity/seller_identity.dart';
 import '../../../widgets/common/buttons/tinted_icon_button.dart';
-import '../../seller/product/add_product_screen.dart';
+import '../../seller/product/product_camera_screen.dart';
 import '../../seller/analytic/analytic_screen.dart';
 
 /// @title JualScreen
@@ -157,7 +157,7 @@ class _JualScreenState extends ConsumerState<JualScreen> {
               TintedIconButton(
                 key: const Key('jual-add'),
                 codePoint: PhosphorCode.plus,
-                onPressed: () => AddProductScreen.push(context),
+                onPressed: () => ProductCameraScreen.push(context),
               ),
             ],
           ),
