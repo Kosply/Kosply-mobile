@@ -6,21 +6,23 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/database/app_database.dart';
+import 'core/network/api_config.dart';
 import 'core/database/providers/database_provider.dart';
 import 'core/storage/providers/storage_providers.dart';
 import 'core/storage/stores/preferences_store.dart';
 import 'core/storage/stores/secure_store.dart';
 import 'data/account/session_repository.dart';
-import 'data/shared/app_seeder.dart';
 import 'layouts/main_layout.dart';
 import 'models/auth/auth_session.dart';
 import 'providers/account/session_provider.dart';
-import 'providers/seed/app_seeder_provider.dart';
 import 'providers/settings/theme_mode_provider.dart';
+import 'providers/sync/app_sync_provider.dart';
 import 'screens/seller/product/add_product_screen.dart';
 import 'screens/seller/product/product_camera_screen.dart';
 import 'screens/settings/app/app_setting_screen.dart';
@@ -41,21 +43,26 @@ import 'screens/main/home/see_all_screen.dart';
 import 'screens/seller/detail/seller_detail_screen.dart';
 import 'screens/settings/app/setting_detail_screen.dart';
 import 'screens/settings/hub/settings_screen.dart';
+import 'screens/settings/notifications/notification_inbox_screen.dart';
+import 'screens/settings/verification/verification_screen.dart';
 import 'screens/support/ticket/ticket_detail_screen.dart';
 import 'screens/auth/onboarding/splash_screen.dart';
 import 'theme/app/kosply_theme.dart';
+import 'widgets/ai/overlay/ai_overlay_layer.dart';
 
 /// @notice Starts the Flutter application.
 /// @dev Opens the platform stores and database, restores the session from the
-/// keystore, fills the offline-first cache, then runs the app inside an
-/// {UncontrolledProviderScope} so the first frame already has data.
+/// keystore, then runs the app inside an {UncontrolledProviderScope}. The
+/// first frame shows the cached data; {AppSync} refreshes it from the backend
+/// right after, so a phone without network still opens instantly.
 /// @return Future completing when the app is running.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiConfig.load();
   final SecureStore secureStore = SecureStore();
-  final AuthSession? session = await SessionRepository(
-    secure: secureStore,
-  ).restore();
+  final AuthSession? session = await SessionRepository.restoreFrom(
+    secureStore,
+  );
   final ProviderContainer container = ProviderContainer(
     overrides: [
       preferencesStoreProvider.overrideWithValue(
@@ -70,11 +77,10 @@ Future<void> main() async {
       ),
     ],
   );
-  final AppSeeder seeder = container.read(appSeederProvider);
-  await seeder.seedIfEmpty();
   runApp(
     UncontrolledProviderScope(container: container, child: const MyApp()),
   );
+  unawaited(container.read(appSyncProvider).syncAll());
 }
 
 /// @title MyApp
@@ -105,6 +111,7 @@ class MyApp extends ConsumerWidget {
       theme: KosplyTheme.light,
       darkTheme: KosplyTheme.dark,
       themeMode: themeMode,
+      navigatorObservers: <NavigatorObserver>[aiRouteObserver],
       home: const SplashScreen(),
       routes: {
         SplashScreen.routeName: (_) => const SplashScreen(),
@@ -126,6 +133,8 @@ class MyApp extends ConsumerWidget {
         HelpDeskScreen.routeName: (_) => const HelpDeskScreen(),
         ContactSupportScreen.routeName: (_) => const ContactSupportScreen(),
         CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
+        NotificationInboxScreen.routeName: (_) => const NotificationInboxScreen(),
+        VerificationScreen.routeName: (_) => const VerificationScreen(),
       },
       // @dev Product view, see-all, and setting detail all need arguments, so
       // @dev they are generated instead of registered in the table above.
@@ -152,7 +161,7 @@ class MyApp extends ConsumerWidget {
           case ChatDetailScreen.routeName:
             return MaterialPageRoute<void>(
               builder: (_) =>
-                  ChatDetailScreen(sellerId: settings.arguments! as String),
+                  ChatDetailScreen(conversationId: settings.arguments! as String),
             );
           case TicketDetailScreen.routeName:
             return MaterialPageRoute<void>(

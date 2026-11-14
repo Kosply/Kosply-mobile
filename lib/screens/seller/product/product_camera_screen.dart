@@ -181,13 +181,19 @@ class _ProductCameraScreenState extends ConsumerState<ProductCameraScreen>
 
   /// @notice Opens the form with the camera released, restarting it if the
   /// seller comes back to retake photos.
+  /// @dev A published listing closes the camera too, back to the Jual tab.
   /// @return Future completing once the form is popped.
   Future<void> _next() async {
     _close();
-    await AddProductScreen.push(context);
-    if (mounted) {
-      await _open();
+    final bool? published = await AddProductScreen.push(context);
+    if (!mounted) {
+      return;
     }
+    if (published == true) {
+      Navigator.of(context).pop();
+      return;
+    }
+    await _open();
   }
 
   /// @notice Builds the split camera and photo strip.

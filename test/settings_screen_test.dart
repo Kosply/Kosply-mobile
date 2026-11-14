@@ -1,6 +1,8 @@
 /// @title Settings screen tests
 /// @notice Covers the settings hub: categories, role switch, dark mode, and
 /// navigation into a detail destination.
+/// @dev The hub ListView builds lazily. The surface is tall enough to build
+/// the Support section under the notification and verification tiles.
 /// @author Kosply-mobile
 library;
 
@@ -19,6 +21,7 @@ import 'package:kosply_mobile/screens/auth/register/register_screen.dart';
 import 'package:kosply_mobile/screens/settings/hub/settings_screen.dart';
 import 'package:kosply_mobile/screens/auth/onboarding/splash_screen.dart';
 import 'package:kosply_mobile/theme/app/kosply_theme.dart';
+import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 import 'package:kosply_mobile/widgets/settings/card/settings_section_card.dart';
 
 import 'helpers/kosply_test_app.dart';
@@ -30,6 +33,7 @@ Widget _app(Widget home) {
   return Consumer(
     builder: (BuildContext context, WidgetRef ref, Widget? _) {
       return MaterialApp(
+        navigatorObservers: <NavigatorObserver>[aiRouteObserver],
         theme: KosplyTheme.light,
         darkTheme: KosplyTheme.dark,
         themeMode: ref.watch(themeModeProvider),
@@ -54,7 +58,7 @@ void main() {
   testWidgets('settings screen shows three categories and the role switch', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -81,7 +85,7 @@ void main() {
   testWidgets('switching to penjual updates the mode line', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -99,7 +103,7 @@ void main() {
   testWidgets('dark mode switch flips the app theme', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -122,7 +126,7 @@ void main() {
   testWidgets('profile setting opens the profile form', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -141,7 +145,7 @@ void main() {
   testWidgets('profile setting shows bio in penjual mode', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -159,7 +163,7 @@ void main() {
   testWidgets('setting row opens the account setting screen', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -179,8 +183,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('setting-profile')), findsOneWidget);
-    expect(find.text('Nama'), findsOneWidget);
-    expect(find.text('username'), findsOneWidget);
+    expect(find.text('Kamu'), findsOneWidget);
+    expect(find.text('@kamu'), findsOneWidget);
     expect(find.text('Notification'), findsOneWidget);
     expect(find.byKey(const Key('notify-mode')), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
@@ -193,7 +197,7 @@ void main() {
   testWidgets('setting profile row opens the profile form', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -213,7 +217,7 @@ void main() {
   testWidgets('personalisasi shows notification switches', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -254,7 +258,7 @@ void main() {
   testWidgets('ganti password opens the existing reset flow', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -276,7 +280,7 @@ void main() {
   testWidgets('logout returns to the splash screen', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -301,7 +305,7 @@ void main() {
   testWidgets('favorite opens the favorite screen', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -320,7 +324,7 @@ void main() {
   testWidgets('analytic opens the analytic screen', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -341,7 +345,7 @@ void main() {
   testWidgets('help desk opens the dropdown screen', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
@@ -357,7 +361,7 @@ void main() {
   testWidgets('contact support opens the ticket inbox', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.physicalSize = const Size(1170, 3600);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 

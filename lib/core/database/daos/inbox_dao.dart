@@ -146,6 +146,34 @@ class InboxDao extends DatabaseAccessor<AppDatabase> with _$InboxDaoMixin {
     });
   }
 
+  /// @notice Merges rooms, their members and bubbles into the cache.
+  /// @dev Members are merged column-by-column so a room's public member row
+  /// never clears the signed-in profile's `isMe` flag or a cached bio.
+  /// @param rooms Room companions.
+  /// @param members Member user companions.
+  /// @param bubbles Message companions.
+  /// @return Future completing when the batch is durable.
+  Future<void> upsertRooms({
+    List<ConversationsCompanion> rooms = const <ConversationsCompanion>[],
+    List<UsersCompanion> members = const <UsersCompanion>[],
+    List<MessagesCompanion> bubbles = const <MessagesCompanion>[],
+  }) {
+    return batch((Batch batch) {
+      batch.insertAllOnConflictUpdate(users, members);
+      batch.insertAllOnConflictUpdate(conversations, rooms);
+      batch.insertAllOnConflictUpdate(messages, bubbles);
+    });
+  }
+
+  /// @notice Zeroes one room's unread badge after its thread was read.
+  /// @param conversationId Room id.
+  /// @return Future completing when the write is durable.
+  Future<void> clearUnread(String conversationId) {
+    return (update(conversations)
+          ..where(($ConversationsTable row) => row.id.equals(conversationId)))
+        .write(const ConversationsCompanion(unreadCount: Value<int>(0)));
+  }
+
   /// @notice Upserts bubbles without dropping what is already cached.
   /// @param rows MessageRow companions to store.
   /// @return Future completing when the transaction is durable.

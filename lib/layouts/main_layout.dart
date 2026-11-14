@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/ui_bridge/ui_command_host.dart';
 import '../models/account/account_mode.dart';
+import '../widgets/ai/overlay/ai_overlay_layer.dart';
 import '../models/account/user_profile.dart';
 import '../providers/account/account_mode_provider.dart';
 import '../providers/navigation/navigation_provider.dart';
@@ -87,151 +89,158 @@ class KosplyMainLayout extends ConsumerWidget {
         ? 0
         : currentPageIndex;
 
-    return Scaffold(
-      backgroundColor: shellColor,
-      appBar: AppBar(
+    return UiCommandHost(
+      child: Scaffold(
         backgroundColor: shellColor,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            const KosplyMark(size: 36),
-            const SizedBox(width: 12),
+        appBar: AppBar(
+          backgroundColor: shellColor,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          titleSpacing: 16,
+          title: Row(
+            children: [
+              const KosplyMark(size: 36),
+              const SizedBox(width: 12),
 
-            // 2. Location Pill Container
-            // @dev Flexible so the label ellipsises instead of overflowing the
-            // @dev app bar on narrow screens.
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: KosplyColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    PhosphorGlyph(
-                      PhosphorCode.mapPin,
-                      size: 16,
-                      color: KosplyColors.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'ITB Ganesha',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: KosplyColors.textPrimaryOf(context),
-                          fontWeight: FontWeight.w500,
+              // 2. Location Pill Container
+              // @dev Flexible so the label ellipsises instead of overflowing the
+              // @dev app bar on narrow screens.
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: KosplyColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      PhosphorGlyph(
+                        PhosphorCode.mapPin,
+                        size: 16,
+                        color: KosplyColors.primary,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'ITB Ganesha',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: KosplyColors.textPrimaryOf(context),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              ),
+            ],
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: GestureDetector(
+                key: const Key('top-bar-profile'),
+                onTap: () => ProfileSettingScreen.push(context),
+                child: hasPhoto
+                    ? SellerAvatar(path: avatarPath, size: 32)
+                    : CircleAvatar(
+                        radius: 16,
+                        backgroundColor: KosplyColors.primary.withValues(
+                          alpha: 0.12,
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          size: 18,
+                          color: KosplyColors.primary,
+                        ),
+                      ),
               ),
             ),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: GestureDetector(
-              key: const Key('top-bar-profile'),
-              onTap: () => ProfileSettingScreen.push(context),
-              child: hasPhoto
-                  ? SellerAvatar(path: avatarPath, size: 32)
-                  : CircleAvatar(
-                      radius: 16,
-                      backgroundColor: KosplyColors.primary.withValues(
-                        alpha: 0.12,
-                      ),
-                      child: Icon(
-                        Icons.person,
-                        size: 18,
-                        color: KosplyColors.primary,
-                      ),
-                    ),
+        body: AiOverlayLayer(
+          child: <Widget>[
+            const HomeScreen(),
+            const SearchScreen(),
+            const JualScreen(),
+            const InboxScreen(),
+            const SettingsScreen(),
+          ][pageIndex],
+        ),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: shellColor,
+            border: Border(
+              top: BorderSide(
+                color: KosplyColors.outlineOf(context),
+                width: 1.0,
+              ),
             ),
           ),
-        ],
-      ),
-      body: <Widget>[
-        const HomeScreen(),
-        const SearchScreen(),
-        const JualScreen(),
-        const InboxScreen(),
-        const SettingsScreen(),
-      ][pageIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: shellColor,
-          border: Border(
-            top: BorderSide(color: KosplyColors.outlineOf(context), width: 1.0),
-          ),
-        ),
-        child: NavigationBarTheme(
-          data: NavigationBarThemeData(
-            iconTheme: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return const IconThemeData(color: KosplyColors.primary);
-              }
-              return IconThemeData(color: onShell.withValues(alpha: 0.64));
-            }),
-            labelTextStyle: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return const TextStyle(
-                  color: KosplyColors.primary,
+          child: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              iconTheme: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return const IconThemeData(color: KosplyColors.primary);
+                }
+                return IconThemeData(color: onShell.withValues(alpha: 0.64));
+              }),
+              labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return const TextStyle(
+                    color: KosplyColors.primary,
+                    fontWeight: FontWeight.bold,
+                  );
+                }
+                return TextStyle(
+                  color: onShell.withValues(alpha: 0.64),
                   fontWeight: FontWeight.bold,
                 );
-              }
-              return TextStyle(
-                color: onShell.withValues(alpha: 0.64),
-                fontWeight: FontWeight.bold,
-              );
-            }),
-          ),
-          child: NavigationBar(
-            backgroundColor: shellColor,
-            indicatorColor: const Color(0x00000000),
-            selectedIndex: visualIndexFor(pageIndex, isSeller),
-            onDestinationSelected: (int index) {
-              ref
-                  .read(navigationIndexProvider.notifier)
-                  .setIndex(pageIndexFor(index, isSeller));
-            },
-            destinations: <Widget>[
-              const NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: 'Home',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.search),
-                label: 'Search',
-              ),
-              if (isSeller)
+              }),
+            ),
+            child: NavigationBar(
+              backgroundColor: shellColor,
+              indicatorColor: const Color(0x00000000),
+              selectedIndex: visualIndexFor(pageIndex, isSeller),
+              onDestinationSelected: (int index) {
+                ref
+                    .read(navigationIndexProvider.notifier)
+                    .setIndex(pageIndexFor(index, isSeller));
+              },
+              destinations: <Widget>[
                 const NavigationDestination(
-                  icon: Icon(Icons.sell_outlined),
-                  selectedIcon: Icon(Icons.sell),
-                  label: 'Jual',
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'Home',
                 ),
-              const NavigationDestination(
-                icon: Icon(Icons.inbox_outlined),
-                selectedIcon: Icon(Icons.inbox),
-                label: 'Inbox',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'Profil',
-              ),
-            ],
+                const NavigationDestination(
+                  icon: Icon(Icons.search),
+                  label: 'Search',
+                ),
+                if (isSeller)
+                  const NavigationDestination(
+                    icon: Icon(Icons.sell_outlined),
+                    selectedIcon: Icon(Icons.sell),
+                    label: 'Jual',
+                  ),
+                const NavigationDestination(
+                  icon: Icon(Icons.inbox_outlined),
+                  selectedIcon: Icon(Icons.inbox),
+                  label: 'Inbox',
+                ),
+                const NavigationDestination(
+                  icon: Icon(Icons.person_outline),
+                  selectedIcon: Icon(Icons.person),
+                  label: 'Profil',
+                ),
+              ],
+            ),
           ),
         ),
       ),

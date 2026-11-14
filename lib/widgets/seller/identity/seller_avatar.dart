@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../../models/catalog/seller.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../common/icons/phosphor_icons.dart';
+import '../../common/images/kosply_image.dart';
 
 /// @title SellerAvatar
 /// @notice Round photo used on identity rows, inbox, and chat bubbles.
@@ -37,8 +38,8 @@ class SellerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipOval(
-      child: Image.asset(
-        path,
+      child: Image(
+        image: KosplyImage.providerFor(path.isEmpty ? Seller.avatar : path),
         width: size,
         height: size,
         fit: BoxFit.cover,

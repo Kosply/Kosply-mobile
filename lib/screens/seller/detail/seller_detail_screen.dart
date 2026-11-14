@@ -1,16 +1,22 @@
 /// @title SellerDetailScreen
 /// @notice Profile of a student seller: identity, bio, and their catalogue.
 /// @dev Opened from the seller row on {ProductViewScreen}. Filters sit under
-/// the "Barang jualan" heading and reshape the product grid in place.
+/// the "Barang jualan" heading and reshape the product grid in place. The
+/// profile (`GET /api/users/:id`) and shelf (`GET /api/products?sellerId=`)
+/// refresh on open; chat opens a direct room with the seller.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/inbox/inbox_providers.dart';
+import '../../reports/report_sheet.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/seller/chat/chat_seller_bar.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
@@ -100,11 +106,33 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     return items;
   }
 
+  /// @notice Opens a direct room with this seller, then the chat.
+  /// @return Future completing when navigation starts.
+  Future<void> _openChat() async {
+    final String roomId;
+    try {
+      roomId = await ref
+          .read(inboxRepositoryProvider)
+          .openForSeller(widget.sellerId);
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+      return;
+    }
+    if (mounted && roomId.isNotEmpty) {
+      await ChatDetailScreen.push(context, roomId);
+    }
+  }
+
   /// @notice Builds the seller profile.
   /// @param context The build context.
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.watch(sellerSyncProvider(widget.sellerId));
     final Seller? seller = ref.watch(sellerProvider(widget.sellerId)).value;
     final List<Product> listed =
         ref.watch(sellerProductsProvider(widget.sellerId)).value ??
@@ -128,6 +156,18 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
           ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+        actions: [
+          if (seller.id != ref.watch(currentUserIdProvider))
+            IconButton(
+              key: const Key('seller-report'),
+              icon: PhosphorGlyph(
+                PhosphorCode.megaphone,
+                size: 20,
+                color: KosplyColors.textPrimaryOf(context),
+              ),
+              onPressed: () => showReportSheet(context, userId: seller.id),
+            ),
+        ],
         title: Text(
           seller.name,
           style: TextStyle(
@@ -176,7 +216,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         ],
       ),
       bottomNavigationBar: ChatSellerBar(
-        onPressed: () => ChatDetailScreen.push(context, widget.sellerId),
+        onPressed: _openChat,
       ),
     );
   }

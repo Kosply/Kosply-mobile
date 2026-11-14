@@ -1,6 +1,6 @@
 /// @title Home AI overlay
-/// @notice Floating brain circle that expands into a search-width composer
-/// with a chat or history panel stacked above it.
+/// @notice Floating brain circle on the right that expands into a
+/// search-width composer with a chat or history panel stacked above it.
 /// @author Kosply-mobile
 library;
 
@@ -15,7 +15,7 @@ import '../history/ai_history_tile.dart';
 import '../../common/icons/phosphor_icons.dart';
 
 /// @title AiHomeOverlay
-/// @notice Bottom-centered AI composer and the overlay stacked above it.
+/// @notice Bottom-right AI composer and the overlay stacked above it.
 class AiHomeOverlay extends ConsumerStatefulWidget {
   /// @notice Creates the Home AI overlay.
   /// @return A new {AiHomeOverlay} instance.
@@ -65,7 +65,10 @@ class _AiHomeOverlayState extends ConsumerState<AiHomeOverlay> {
           if (ai.composerOpen)
             _ComposerBar(controller: _controller, onSend: _send)
           else
-            const Center(child: _ComposerFab()),
+            const Align(
+              alignment: Alignment.centerRight,
+              child: _ComposerFab(),
+            ),
         ],
       ),
     );
@@ -73,7 +76,7 @@ class _AiHomeOverlayState extends ConsumerState<AiHomeOverlay> {
 }
 
 /// @title _ComposerFab
-/// @notice Collapsed circular brain control, centered like a FAB.
+/// @notice Collapsed circular brain control, sitting on the right.
 class _ComposerFab extends ConsumerWidget {
   const _ComposerFab();
 
@@ -360,7 +363,7 @@ class _ChatBody extends StatelessWidget {
         children: [
           for (int i = 0; i < messages.length; i++) ...[
             if (i > 0) const SizedBox(height: 12),
-            _AiBubble(message: messages[i]),
+            _AiBubble(threadId: thread?.id ?? '', message: messages[i]),
           ],
         ],
       ),
@@ -370,9 +373,12 @@ class _ChatBody extends StatelessWidget {
 
 /// @title _AiBubble
 /// @notice One human or AI bubble plus copy / re-prompt actions.
+/// @dev Thinking sits above the answer. An approval interrupt offers Setujui
+/// and Tolak for the chat action. There is no call button.
 class _AiBubble extends ConsumerWidget {
-  const _AiBubble({required this.message});
+  const _AiBubble({required this.threadId, required this.message});
 
+  final String threadId;
   final AiMessage message;
 
   @override
@@ -392,6 +398,22 @@ class _AiBubble extends ConsumerWidget {
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
+        if (!mine && message.thinking.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: Text(
+                message.thinking,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  fontStyle: FontStyle.italic,
+                  color: KosplyColors.textSecondaryOf(context),
+                ),
+              ),
+            ),
+          ),
         Container(
           constraints: const BoxConstraints(maxWidth: 280),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -404,6 +426,32 @@ class _AiBubble extends ConsumerWidget {
             style: TextStyle(fontSize: 14, height: 1.35, color: textColor),
           ),
         ),
+        if (message.needsApproval) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                key: const Key('ai-approve'),
+                onPressed: () => ref.read(aiChatProvider.notifier).decide(
+                  threadId: threadId,
+                  bubbleId: message.id,
+                  approve: true,
+                ),
+                child: const Text('Setujui'),
+              ),
+              TextButton(
+                key: const Key('ai-reject'),
+                onPressed: () => ref.read(aiChatProvider.notifier).decide(
+                  threadId: threadId,
+                  bubbleId: message.id,
+                  approve: false,
+                ),
+                child: const Text('Tolak'),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 6),
         Row(
           mainAxisSize: MainAxisSize.min,

@@ -40,7 +40,7 @@ void main() {
     expect(find.text('seller1'), findsOneWidget);
     await tester.ensureVisible(find.byType(SellerIdentity));
     await tester.pumpAndSettle();
-    expect(find.text('aktif 5 menit lalu'), findsOneWidget);
+    expect(find.text('aktif 5 menit lalu'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

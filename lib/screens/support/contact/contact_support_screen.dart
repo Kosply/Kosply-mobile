@@ -76,6 +76,7 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.watch(ticketsSyncProvider);
     final List<SupportTicket> all =
         ref.watch(supportTicketsProvider).value ?? const <SupportTicket>[];
     final List<SupportTicket> items = _visible(all);

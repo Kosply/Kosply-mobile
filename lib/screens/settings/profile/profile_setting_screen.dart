@@ -6,6 +6,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../models/account/account_mode.dart';
 import '../../../models/catalog/seller.dart';
 import '../../../models/account/user_profile.dart';
@@ -78,18 +79,32 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
     setState(() => _avatarPath = Seller.avatar);
   }
 
-  void _save() {
-    ref
-        .read(profileProvider.notifier)
-        .save(
-          UserProfile(
-            name: _name.text.trim(),
-            username: _username.text.trim(),
-            bio: _bio.text.trim(),
-            avatarPath: _avatarPath,
-          ),
-        );
-    Navigator.of(context).maybePop();
+  /// @notice Saves through `PATCH /api/users/me` and closes on success.
+  /// @dev A refusal (e.g. a taken username) keeps the form open and says why.
+  /// @return Future completing when the form closed or the error is shown.
+  Future<void> _save() async {
+    try {
+      await ref
+          .read(profileProvider.notifier)
+          .save(
+            UserProfile(
+              name: _name.text.trim(),
+              username: _username.text.trim(),
+              bio: _bio.text.trim(),
+              avatarPath: _avatarPath,
+            ),
+          );
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+      return;
+    }
+    if (mounted) {
+      await Navigator.of(context).maybePop();
+    }
   }
 
   /// @notice Builds the profile form.

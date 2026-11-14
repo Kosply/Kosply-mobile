@@ -31,7 +31,7 @@ void main() {
 
     expect(find.byType(SellerIdentity), findsOneWidget);
     expect(find.text('seller1'), findsWidgets);
-    expect(find.text('aktif 5 menit lalu'), findsOneWidget);
+    expect(find.text('aktif 5 menit lalu'), findsNothing);
     expect(find.textContaining('Lorem ipsum dolor sit amet'), findsOneWidget);
     expect(find.text('Chat penjual'), findsOneWidget);
     expect(find.text('Barang jualan'), findsOneWidget);

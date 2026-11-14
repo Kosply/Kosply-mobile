@@ -7,9 +7,9 @@ library;
 
 import 'package:drift/drift.dart';
 
-import '../../core/database/app_database.dart';
-import '../../models/chat/ai_thread.dart';
-import '../shared/local_user.dart';
+import 'package:kosply_mobile/core/database/app_database.dart';
+import 'package:kosply_mobile/models/chat/ai_thread.dart';
+import 'local_user.dart';
 
 /// @title PlaceholderAiChat
 /// @notice Fake data source for the Home AI overlay and history list.

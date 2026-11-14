@@ -4,10 +4,14 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kosply_mobile/layouts/main_layout.dart';
 import 'package:kosply_mobile/screens/main/home/home_screen.dart';
-import 'package:kosply_mobile/screens/main/search/search_screen.dart';
+import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
+import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 import 'package:kosply_mobile/widgets/common/search/searchbar.dart';
 
 import 'helpers/kosply_test_app.dart';
@@ -20,7 +24,7 @@ void _setPhone(WidgetTester tester) {
 
 Future<void> _pumpHome(WidgetTester tester) async {
   _setPhone(tester);
-  await pumpKosplyApp(tester, const HomeScreen());
+  await pumpKosplyApp(tester, const AiOverlayLayer(child: HomeScreen()));
   await tester.pump();
 }
 
@@ -35,6 +39,10 @@ void main() {
     expect(find.byKey(const Key('ai-fab')), findsOneWidget);
     expect(find.byKey(const Key('ai-composer')), findsNothing);
     expect(tester.getSize(find.byKey(const Key('ai-fab'))).width, 48);
+    final Rect fab = tester.getRect(find.byKey(const Key('ai-fab')));
+    final double width =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    expect(fab.center.dx, greaterThan(width * 0.7));
 
     await tester.dragUntilVisible(
       find.text('Chat history'),
@@ -212,13 +220,38 @@ void main() {
     expect(find.byKey(const Key('ai-panel')), findsNothing);
   });
 
-  testWidgets('search screen does not show the AI overlay', (
+  testWidgets('the AI control stays on every tab and on a product', (
     WidgetTester tester,
   ) async {
     _setPhone(tester);
-    await pumpKosplyApp(tester, const SearchScreen());
+    await pumpKosplyApp(tester, const KosplyMainLayout());
 
-    expect(find.byKey(const Key('ai-fab')), findsNothing);
-    expect(find.byKey(const Key('ai-composer')), findsNothing);
+    expect(find.byKey(const Key('ai-fab')), findsOneWidget);
+
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dibuka terakhir'), findsOneWidget);
+    expect(find.byKey(const Key('ai-fab')), findsOneWidget);
+
+    await tester.tap(find.text('Inbox'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('ai-fab')), findsOneWidget);
+
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('ai-fab')), findsOneWidget);
+
+    final BuildContext shell = tester.element(find.byType(KosplyMainLayout));
+    unawaited(
+      Navigator.of(shell).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const ProductViewScreen(productId: 'product-0'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Meja belajar lipat'), findsWidgets);
+    expect(find.byKey(const Key('ai-fab')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

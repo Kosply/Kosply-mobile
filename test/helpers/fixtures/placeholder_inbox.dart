@@ -7,10 +7,10 @@ library;
 
 import 'package:drift/drift.dart';
 
-import '../../core/database/app_database.dart';
-import '../../models/catalog/seller.dart';
-import '../../models/chat/conversation.dart';
-import '../shared/local_user.dart';
+import 'package:kosply_mobile/core/database/app_database.dart';
+import 'package:kosply_mobile/models/chat/conversation.dart';
+import 'local_user.dart';
+import 'placeholder_catalog.dart';
 
 /// @title PlaceholderInbox
 /// @notice Fake data source for the Inbox tab and chat detail.
@@ -24,7 +24,7 @@ class PlaceholderInbox {
     return <Conversation>[
       Conversation(
         id: 'seller-1',
-        peer: Seller.placeholder(0),
+        peer: PlaceholderCatalog.sellerAt(0),
         preview: 'Meja masih available?',
         timeLabel: '10:24',
         unreadCount: 2,
@@ -32,14 +32,14 @@ class PlaceholderInbox {
       ),
       Conversation(
         id: 'seller-2',
-        peer: Seller.placeholder(1),
+        peer: PlaceholderCatalog.sellerAt(1),
         preview: 'Bisa COD di Ganesha?',
         timeLabel: 'Kemarin',
         category: 'Pembeli',
       ),
       Conversation(
         id: 'seller-3',
-        peer: Seller.placeholder(2),
+        peer: PlaceholderCatalog.sellerAt(2),
         preview: 'Oke, saya hold dulu ya',
         timeLabel: 'Sen',
         unreadCount: 1,
@@ -47,7 +47,7 @@ class PlaceholderInbox {
       ),
       Conversation(
         id: 'seller-4',
-        peer: Seller.placeholder(3),
+        peer: PlaceholderCatalog.sellerAt(3),
         preview: 'Harga bisa kurang?',
         timeLabel: '12 Agu',
         category: 'Pembeli',

@@ -8,6 +8,8 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../models/form/form_step.dart';
@@ -17,6 +19,25 @@ import '../verification/email_code_verification.dart';
 import 'form_actions.dart';
 import 'form_heading.dart';
 
+/// @title StepFeedback
+/// @notice A server-side refusal of a submitted step.
+/// @dev Returned from {SteppedForm.onStepSubmit}; [step] moves the form back
+/// to the field the server objected to (e.g. the email step on
+/// `EMAIL_TAKEN`), or stays on the current step when null.
+class StepFeedback {
+  /// @notice Creates feedback.
+  /// @param message Error shown under the field.
+  /// @param step Step to show it on; null keeps the current step.
+  /// @return A new {StepFeedback} instance.
+  const StepFeedback(this.message, {this.step});
+
+  /// @dev Error shown under the field.
+  final String message;
+
+  /// @dev Step to show it on; null keeps the current step.
+  final int? step;
+}
+
 /// @title SteppedForm
 /// @notice Stateful multi-step form with a single input per step.
 class SteppedForm extends StatefulWidget {
@@ -25,15 +46,21 @@ class SteppedForm extends StatefulWidget {
   /// @param onCompleted Called with one value per step when the last step is
   /// submitted successfully; code steps contribute their joined digits.
   /// @param onExit Called when Back is pressed on the first step; defaults to
-  /// popping the current route.
+  /// {NavigatorState.maybePop}, which never removes the last route.
   /// @param continueLabel Label of the primary button.
   /// @param emailStepIndex Index of the step holding the email address shown
   /// in the verification reminder line.
   /// @param initialValues Prefilled text per step index, e.g. the Google name.
+  /// @param onStepSubmit Async check after a step validates locally, e.g. a
+  /// backend call; returning feedback keeps the form open with the error.
+  /// @param onResend Asks the server for a fresh code. The argument is the
+  /// email currently on the form. Null keeps the resend link local.
   /// @return A new {SteppedForm} instance.
   const SteppedForm({
     required this.steps,
     required this.onCompleted,
+    this.onStepSubmit,
+    this.onResend,
     this.onExit,
     this.continueLabel = 'Continue',
     this.emailStepIndex = 0,
@@ -46,6 +73,13 @@ class SteppedForm extends StatefulWidget {
 
   /// @dev Called with one value per step when the last step is submitted.
   final void Function(List<String> values) onCompleted;
+
+  /// @dev Async check run after a step validates, before the form moves on.
+  final Future<StepFeedback?> Function(int step, List<String> values)?
+  onStepSubmit;
+
+  /// @dev Asks the server for a fresh code. Null keeps resend local.
+  final Future<StepFeedback?> Function(String email)? onResend;
 
   /// @dev Called when Back is pressed on the first step.
   final VoidCallback? onExit;
@@ -71,6 +105,9 @@ class SteppedForm extends StatefulWidget {
 class _SteppedFormState extends State<SteppedForm> {
   /// @dev Zero-based index of the active step.
   late int _step = 0;
+
+  /// @dev True while {SteppedForm.onStepSubmit} is waiting on the backend.
+  bool _busy = false;
 
   /// @dev One controller per text step, keyed by step index.
   final Map<int, TextEditingController> _controllers = {};
@@ -138,7 +175,7 @@ class _SteppedFormState extends State<SteppedForm> {
       if (onExit != null) {
         onExit();
       } else {
-        Navigator.of(context).pop();
+        Navigator.of(context).maybePop();
       }
       return;
     }
@@ -161,21 +198,92 @@ class _SteppedFormState extends State<SteppedForm> {
   }
 
   /// @notice Validates the active step and advances when valid.
-  /// @dev Calls {SteppedForm.onCompleted} after the last step.
-  /// @return void
-  void _onContinue() {
+  /// @dev Runs {SteppedForm.onStepSubmit} first when given, ignoring taps
+  /// while it waits; calls {SteppedForm.onCompleted} after the last step.
+  /// @return Future completing when the step is settled.
+  Future<void> _onContinue() async {
+    if (_busy) {
+      return;
+    }
     final step = widget.steps[_step];
     final error = step.validator(_currentValue());
     if (error != null) {
       setState(() => _error = error);
       return;
     }
+    final submit = widget.onStepSubmit;
+    if (submit != null) {
+      setState(() => _busy = true);
+      StepFeedback? feedback;
+      try {
+        feedback = await submit(_step, _collectValues());
+      } finally {
+        if (mounted) {
+          setState(() => _busy = false);
+        }
+      }
+      if (!mounted) {
+        return;
+      }
+      final StepFeedback? refusal = feedback;
+      if (refusal != null) {
+        setState(() {
+          _step = refusal.step ?? _step;
+          _error = refusal.message;
+        });
+        return;
+      }
+    }
     if (_step == widget.steps.length - 1) {
       widget.onCompleted(_collectValues());
       return;
     }
     setState(() {
-      _step++;
+      final int next = _step + 1;
+      if (widget.steps[next].isCodeStep) {
+        for (final TextEditingController controller in _codeControllers) {
+          controller.clear();
+        }
+      }
+      _step = next;
+      _error = null;
+    });
+  }
+
+  /// @notice Asks for a fresh code and clears the boxes when it is accepted.
+  /// @return Future completing when the request settles.
+  Future<void> _onResend() async {
+    final Future<StepFeedback?> Function(String email)? resend = widget.onResend;
+    if (resend == null || _busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    StepFeedback? feedback;
+    try {
+      feedback = await resend(_controllerFor(widget.emailStepIndex).text);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    final StepFeedback? refusal = feedback;
+    if (refusal != null) {
+      setState(() {
+        _step = refusal.step ?? _step;
+        _error = refusal.message;
+      });
+      return;
+    }
+    setState(() {
+      for (final TextEditingController controller in _codeControllers) {
+        controller.clear();
+      }
       _error = null;
     });
   }
@@ -195,38 +303,48 @@ class _SteppedFormState extends State<SteppedForm> {
   Widget build(BuildContext context) {
     final step = widget.steps[_step];
 
-    return AuthScaffold(
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          FormHeading(step.title),
-          const SizedBox(height: 16),
-          if (step.isCodeStep)
-            EmailCodeVerification(
-              controllers: _codeControllers,
-              focusNodes: _codeFocusNodes,
-              email: _controllerFor(widget.emailStepIndex).text,
-              helper: step.helper,
-              error: _error,
-              onChanged: _clearError,
-              onResend: () {},
-            )
-          else
-            AuthTextField(
-              controller: _controllerFor(_step),
-              hint: step.hint,
-              helper: step.helper,
-              error: _error,
-              obscure: step.obscure,
-              keyboardType: step.keyboardType,
-              onChanged: (_) => _clearError(),
-            ),
-        ],
-      ),
-      bottomBar: FormActions(
-        onBack: _onBack,
-        onContinue: _onContinue,
-        continueLabel: widget.continueLabel,
+    // @dev The system back gesture mirrors the on-screen Back: earlier steps
+    // @dev first, then the screen's exit hook on the first step.
+    return PopScope<Object?>(
+      canPop: _step == 0 && widget.onExit == null,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) {
+          _onBack();
+        }
+      },
+      child: AuthScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FormHeading(step.title),
+            const SizedBox(height: 16),
+            if (step.isCodeStep)
+              EmailCodeVerification(
+                controllers: _codeControllers,
+                focusNodes: _codeFocusNodes,
+                email: _controllerFor(widget.emailStepIndex).text,
+                helper: step.helper,
+                error: _error,
+                onChanged: _clearError,
+                onResend: () => unawaited(_onResend()),
+              )
+            else
+              AuthTextField(
+                controller: _controllerFor(_step),
+                hint: step.hint,
+                helper: step.helper,
+                error: _error,
+                obscure: step.obscure,
+                keyboardType: step.keyboardType,
+                onChanged: (_) => _clearError(),
+              ),
+          ],
+        ),
+        bottomBar: FormActions(
+          onBack: _onBack,
+          onContinue: () => unawaited(_onContinue()),
+          continueLabel: _busy ? 'Please wait…' : widget.continueLabel,
+        ),
       ),
     );
   }

@@ -85,7 +85,8 @@ void main() {
     expect(find.text('Open'), findsOneWidget);
     expect(find.text('Close'), findsOneWidget);
     expect(find.text('Barang tidak sesuai deskripsi'), findsOneWidget);
-    expect(find.byKey(const Key('ticket-unread-ticket-1')), findsOneWidget);
+    // GET /api/support/tickets has no messages, so the unread dot stays off.
+    expect(find.byKey(const Key('ticket-unread-ticket-1')), findsNothing);
     expect(find.byKey(const Key('ticket-create')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -147,9 +148,9 @@ void main() {
       find.textContaining('Hai, terima kasih sudah menghubungi Kosply'),
       findsOneWidget,
     );
-    expect(find.byKey(const Key('ticket-plus')), findsOneWidget);
-    expect(find.byKey(const Key('ticket-voice')), findsOneWidget);
-    expect(find.byKey(const Key('ticket-input')), findsOneWidget);
+    expect(find.byKey(const Key('chat-plus')), findsOneWidget);
+    expect(find.byKey(const Key('chat-voice')), findsOneWidget);
+    expect(find.byKey(const Key('chat-input')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

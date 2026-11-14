@@ -2,16 +2,20 @@
 /// @notice Registration landing screen.
 /// @dev Layout keeps the approved design: top wordmark, centered illustration
 /// block, and bottom-pinned actions. Reuses {SocialSignInButton},
-/// {FormActions}, {KosplyWordmark}, and {KosplyColors}. Google sign-in stores
-/// the session in {SecureStore} and opens the shortened registration form,
-/// which skips email, password, and verification.
+/// {FormActions}, {KosplyWordmark}, and {KosplyColors}. Google sign-in goes
+/// through `POST /api/auth/google`; a new account opens the shortened
+/// registration form, which skips email, password, and verification.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
+import '../../../layouts/main_layout.dart';
+import '../../../models/auth/auth_session.dart';
 import '../../../providers/account/session_provider.dart';
+import '../../../providers/sync/app_sync_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/auth/form/form_actions.dart';
 import '../../../widgets/common/brand/kosply_wordmark.dart';
@@ -65,21 +69,45 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     Navigator.of(context).pushNamed(RegisterEmailScreen.routeName);
   }
 
-  /// @notice Signs in with Google and opens the shortened registration form.
-  /// @dev The demo gateway stores the token pair in {SecureStore}; the real
-  /// client id and backend exchange replace it later.
+  /// @notice Signs in with Google, then onboards or opens home.
+  /// @dev `google_sign_in` yields an id token that `POST /api/auth/google`
+  /// exchanges for a session. A new account (`onboardingRequired`) completes
+  /// its campus data on the shortened form; a returning one goes home. A
+  /// cancelled picker is silent; every other failure is a snackbar.
   /// @return Future completing when navigation starts.
   Future<void> _continueWithGoogle() async {
     if (_busy) {
       return;
     }
     setState(() => _busy = true);
-    await ref.read(sessionProvider.notifier).signInWithGoogle();
+    final AuthSession session;
+    try {
+      session = await ref.read(sessionProvider.notifier).signInWithGoogle();
+      await ref.read(appSyncProvider).syncAccount();
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _busy = false);
+      if (error.code != 'GOOGLE_CANCELED') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushReplacementNamed(
-      RegisterEmailScreen.googleRouteName,
+    if (session.onboardingRequired) {
+      Navigator.of(context).pushReplacementNamed(
+        RegisterEmailScreen.googleRouteName,
+      );
+      return;
+    }
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      KosplyMainLayout.routeName,
+      (Route<dynamic> route) => false,
     );
   }
 

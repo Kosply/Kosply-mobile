@@ -12,6 +12,9 @@ import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
+import '../../../core/ui_bridge/ui_bridge.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
+import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
 import '../../../widgets/common/search/searchbar.dart';
 
 /// @title FavoriteScreen
@@ -82,6 +85,7 @@ class _FavoriteScreenState extends ConsumerState<FavoriteScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.watch(favoritesSyncProvider);
     final List<Product> saved =
         ref.watch(favoriteProductsProvider).value ?? const <Product>[];
     final List<String> chips = _chipLabels(saved);
@@ -110,41 +114,50 @@ class _FavoriteScreenState extends ConsumerState<FavoriteScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          KosplySearchbar(
-            key: const Key('favorite-search'),
-            hint: 'Cari favorite...',
-            showFilter: false,
-            onChanged: (String value) {
-              setState(() => _query = value);
-            },
-          ),
-          const SizedBox(height: 16),
-          FilterChipBar(
-            labels: chips,
-            selected: filter,
-            onSelected: (String label) => setState(() => _filter = label),
-          ),
-          const SizedBox(height: 16),
-          if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                saved.isEmpty
-                    ? 'Belum ada barang favorite.'
-                    : 'Belum ada barang di filter ini.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: KosplyColors.textSecondaryOf(context),
-                ),
+      body: AiOverlayLayer(
+        child: UiBridgeScope(
+          screen: 'favorite',
+          elements: <UiElement>[
+            for (final Product item in visible.take(24))
+              UiElement.product(item.id, label: item.title),
+          ],
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+            children: [
+              KosplySearchbar(
+                key: const Key('favorite-search'),
+                hint: 'Cari favorite...',
+                showFilter: false,
+                onChanged: (String value) {
+                  setState(() => _query = value);
+                },
               ),
-            )
-          else
-            ProductGrid(items: visible),
-        ],
+              const SizedBox(height: 16),
+              FilterChipBar(
+                labels: chips,
+                selected: filter,
+                onSelected: (String label) => setState(() => _filter = label),
+              ),
+              const SizedBox(height: 16),
+              if (visible.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Text(
+                    saved.isEmpty
+                        ? 'Belum ada barang favorite.'
+                        : 'Belum ada barang di filter ini.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: KosplyColors.textSecondaryOf(context),
+                    ),
+                  ),
+                )
+              else
+                ProductGrid(items: visible),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,16 +1,19 @@
 /// @title TicketDetailScreen
 /// @notice Support thread: chat like Inbox, with username and active line.
+/// @dev The thread refreshes from `GET /api/support/tickets/:id` on open, and
+/// the composer replies through `POST /api/support/tickets/:id/messages`.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../models/catalog/seller.dart';
 import '../../../models/chat/conversation.dart';
 import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
-import '../../../widgets/common/icons/phosphor_icons.dart';
+import '../../../widgets/common/chat/chat_composer.dart';
 import '../../../widgets/seller/appbar/seller_app_bar.dart';
 import '../../../widgets/seller/identity/seller_avatar.dart';
 
@@ -36,12 +39,31 @@ class TicketDetailScreen extends ConsumerWidget {
     return Navigator.of(context).pushNamed(routeName, arguments: ticketId);
   }
 
+  /// @notice Sends a reply, explaining a refusal (e.g. a closed ticket).
+  /// @param context The build context.
+  /// @param ref Riverpod handle.
+  /// @param text Reply text.
+  /// @return Future completing when the reply is stored.
+  Future<void> _reply(BuildContext context, WidgetRef ref, String text) async {
+    try {
+      await ref.read(supportRepositoryProvider).reply(ticketId, text);
+    } on ApiException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+      rethrow;
+    }
+  }
+
   /// @notice Builds the thread.
   /// @param context The build context.
   /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(ticketSyncProvider(ticketId));
     final Seller agent = ref.watch(supportRepositoryProvider).agent;
     final List<ChatMessage> messages =
         ref.watch(ticketMessagesProvider(ticketId)).value ??
@@ -49,7 +71,48 @@ class TicketDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: SellerAppBar(seller: agent, showActive: true, onMore: () {}),
+      appBar: SellerAppBar(
+        seller: agent,
+        showActive: true,
+        onMore: () async {
+          final bool? close = await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('Tutup tiket ini?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Batal'),
+                  ),
+                  TextButton(
+                    key: const Key('ticket-close'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Tutup'),
+                  ),
+                ],
+              );
+            },
+          );
+          if (close != true || !context.mounted) {
+            return;
+          }
+          try {
+            await ref.read(supportRepositoryProvider).close(ticketId);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Tiket ditutup.')),
+              );
+            }
+          } on ApiException catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(error.userMessage)),
+              );
+            }
+          }
+        },
+      ),
       body: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         itemCount: messages.length,
@@ -60,7 +123,9 @@ class TicketDetailScreen extends ConsumerWidget {
           return _TicketBubble(message: messages[index], agent: agent);
         },
       ),
-      bottomNavigationBar: const _TicketComposer(),
+      bottomNavigationBar: ChatComposer(
+        onSend: (String text) => _reply(context, ref, text),
+      ),
     );
   }
 }
@@ -111,114 +176,6 @@ class _TicketBubble extends StatelessWidget {
         bubble,
         if (mine) ...[const SizedBox(width: 8), avatar],
       ],
-    );
-  }
-}
-
-/// @title _TicketComposer
-/// @notice Bottom input with attach, text, and voice, matching chat.
-class _TicketComposer extends StatelessWidget {
-  const _TicketComposer();
-
-  @override
-  Widget build(BuildContext context) {
-    final Color surface = KosplyColors.surfaceOf(context);
-    final Color outline = KosplyColors.outlineOf(context);
-    final Color iconColor = KosplyColors.textPrimaryOf(context);
-
-    return Material(
-      color: surface,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Row(
-            children: [
-              _ComposerIcon(
-                key: const Key('ticket-plus'),
-                codePoint: PhosphorCode.plus,
-                color: iconColor,
-                onPressed: () {},
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  height: 44,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: KosplyColors.backgroundOf(context),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: outline),
-                  ),
-                  child: Center(
-                    child: TextField(
-                      key: const Key('ticket-input'),
-                      cursorColor: KosplyColors.primary,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: KosplyColors.textPrimaryOf(context),
-                      ),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Tulis pesan...',
-                        hintStyle: TextStyle(
-                          fontSize: 14,
-                          color: KosplyColors.textSecondaryOf(context),
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _ComposerIcon(
-                key: const Key('ticket-voice'),
-                codePoint: PhosphorCode.microphone,
-                color: iconColor,
-                onPressed: () {},
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// @title _ComposerIcon
-/// @notice Circular plus or voice control.
-class _ComposerIcon extends StatelessWidget {
-  const _ComposerIcon({
-    required this.codePoint,
-    required this.color,
-    required this.onPressed,
-    super.key,
-  });
-
-  final int codePoint;
-  final Color color;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: KosplyColors.primary.withValues(alpha: 0.08),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onPressed,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Center(
-            child: PhosphorGlyph(codePoint, size: 18, color: color),
-          ),
-        ),
-      ),
     );
   }
 }

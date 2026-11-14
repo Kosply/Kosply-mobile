@@ -6,11 +6,12 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/core/database/app_database.dart';
+import 'package:kosply_mobile/core/network/api_client.dart';
 import 'package:kosply_mobile/data/account/account_repository.dart';
 import 'package:kosply_mobile/data/catalog/catalog_repository.dart';
 import 'package:kosply_mobile/data/chat/ai_chat_repository.dart';
 import 'package:kosply_mobile/data/inbox/inbox_repository.dart';
-import 'package:kosply_mobile/data/shared/app_seeder.dart';
+import 'package:kosply_mobile/data/shared/app_sync.dart';
 import 'package:kosply_mobile/data/shared/price_labels.dart';
 import 'package:kosply_mobile/data/shared/time_labels.dart';
 import 'package:kosply_mobile/data/support/support_repository.dart';
@@ -20,6 +21,18 @@ import 'package:kosply_mobile/models/chat/ai_thread.dart';
 import 'package:kosply_mobile/models/chat/conversation.dart';
 import 'package:kosply_mobile/models/support/help_topic.dart';
 import 'package:kosply_mobile/models/support/support_ticket.dart';
+
+import 'helpers/fake_backend.dart';
+
+/// @title _FixedTokens
+/// @notice Keeps the fake backend's bearer token on every authed call.
+class _FixedTokens implements ApiTokens {
+  @override
+  String? accessToken = FakeKosplyBackend.accessToken;
+
+  @override
+  Future<bool> refresh() async => true;
+}
 
 /// @notice Offline-first cache checks.
 /// @return void
@@ -33,17 +46,33 @@ void main() {
 
   setUp(() async {
     db = AppDatabase.memory();
-    catalog = CatalogRepository(dao: db.catalogDao);
-    account = AccountRepository(dao: db.accountDao);
-    inbox = InboxRepository(dao: db.inboxDao);
-    support = SupportRepository(dao: db.supportDao);
-    aiChat = AiChatRepository(dao: db.aiChatDao);
-    await AppSeeder(
+    final FakeKosplyBackend backend = FakeKosplyBackend();
+    final ApiClient api = ApiClient(
+      transport: backend.client,
+      baseUrl: FakeKosplyBackend.origin,
+      tokens: _FixedTokens(),
+    );
+    catalog = CatalogRepository(dao: db.catalogDao, api: api);
+    account = AccountRepository(dao: db.accountDao, api: api);
+    inbox = InboxRepository(
+      dao: db.inboxDao,
+      api: api,
+      currentUserId: FakeKosplyBackend.meId,
+    );
+    support = SupportRepository(dao: db.supportDao, api: api);
+    aiChat = AiChatRepository(
+      dao: db.aiChatDao,
+      api: api,
+      currentUserId: FakeKosplyBackend.meId,
+    );
+    await AppSync(
       catalog: catalog,
       inbox: inbox,
       support: support,
       aiChat: aiChat,
-    ).seedIfEmpty();
+      account: account,
+      signedIn: true,
+    ).syncAll();
   });
 
   tearDown(() => db.close());
@@ -92,13 +121,14 @@ void main() {
     expect(products.first.title, 'Meja belajar lipat');
     expect(products.first.price, 'Rp.375.000');
     expect(products.first.sellerName, 'seller1');
-    expect(products.first.sellerActiveLabel, 'aktif 5 menit lalu');
+    // Public seller cards carry no activity timestamp.
+    expect(products.first.sellerActiveLabel, isEmpty);
     expect(products.first.quantity, 1);
 
     final Product? detail = await catalog.watchProduct('product-1').first;
     expect(detail, isNotNull);
     expect(detail!.sellerName, 'seller2');
-    expect(detail.sellerActiveLabel, 'aktif 16 menit lalu');
+    expect(detail.sellerActiveLabel, isEmpty);
 
     final List<Product> listed = await catalog
         .watchProductsBySeller('seller-3')
@@ -130,8 +160,10 @@ void main() {
     },
   );
 
-  test('account profile starts empty and persists a save', () async {
-    expect(await account.watchProfile().first, const UserProfile());
+  test('account profile syncs the signed-in student and persists a save', () async {
+    final UserProfile synced = await account.watchProfile().first;
+    expect(synced.name, 'Kamu');
+    expect(synced.username, 'kamu');
 
     await account.saveProfile(
       const UserProfile(name: 'Fajar', username: 'fajar', bio: 'kos'),
@@ -151,6 +183,7 @@ void main() {
     expect(rows.first.unreadCount, 1);
     expect(rows.first.category, 'Penjual');
 
+    await inbox.refreshMessages('seller-1');
     final List<ChatMessage> messages = await inbox
         .watchMessages('seller-1')
         .first;
@@ -168,6 +201,7 @@ void main() {
     expect(topics, hasLength(6));
     expect(topics.first.title, 'Barang tidak sesuai deskripsi');
 
+    await support.refreshTicket('ticket-1');
     final List<SupportTicket> tickets = await support.watchTickets().first;
     expect(tickets, hasLength(4));
     expect(tickets.first.id, 'ticket-1');
@@ -186,6 +220,7 @@ void main() {
   });
 
   test('AI history hydrates and appends persist', () async {
+    await aiChat.refreshHistory('ai-1');
     final List<AiThread> threads = await aiChat.threadsOnce();
     expect(threads, hasLength(4));
     expect(threads.first.id, 'ai-1');

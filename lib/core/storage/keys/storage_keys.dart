@@ -32,6 +32,16 @@ abstract final class StorageKeys {
   /// @dev Transaction channel flag.
   static const String notificationTransaction = 'settings.notification.transaction';
 
+  /// @dev Verification-result channel flag.
+  static const String notificationVerification =
+      'settings.notification.verification';
+
+  /// @dev Report-outcome channel flag.
+  static const String notificationReports = 'settings.notification.reports';
+
+  /// @dev Support-reply channel flag.
+  static const String notificationSupport = 'settings.notification.support';
+
   /// @dev Access token written after a successful sign-in.
   static const String accessToken = 'auth.access_token';
 
@@ -49,4 +59,13 @@ abstract final class StorageKeys {
 
   /// @dev '1' while the account still needs campus data filled.
   static const String authOnboarding = 'auth.onboarding_required';
+
+  /// @dev Backend `users.id` of the signed-in account.
+  static const String authUserId = 'auth.user_id';
+
+  /// @dev Marketplace handle of the signed-in account.
+  static const String authUsername = 'auth.username';
+
+  /// @dev Backend role of the signed-in account (`BUYER`, `SELLER`, ...).
+  static const String authRole = 'auth.role';
 }

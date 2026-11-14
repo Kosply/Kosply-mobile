@@ -11,7 +11,9 @@ import '../../../models/account/account_mode.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
 import '../../../providers/account/account_mode_provider.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -28,9 +30,6 @@ class JualScreen extends ConsumerStatefulWidget {
   /// @notice Creates the jual screen.
   /// @return A new {JualScreen} instance.
   const JualScreen({super.key});
-
-  /// @dev Signed-in student used as the placeholder seller.
-  static const String sellerId = 'seller-1';
 
   /// @dev Filter shown first, listing every item the seller has.
   static const String filterAll = 'Semua';
@@ -106,10 +105,13 @@ class _JualScreenState extends ConsumerState<JualScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
-    final Seller? seller = ref.watch(sellerProvider(JualScreen.sellerId)).value;
+    // @dev The shelf is the signed-in student's own: `GET /api/users/:id` and
+    // @dev `GET /api/products?sellerId=` for their backend id.
+    final String sellerId = ref.watch(currentUserIdProvider);
+    ref.watch(sellerSyncProvider(sellerId));
+    final Seller? seller = ref.watch(sellerProvider(sellerId)).value;
     final List<Product> listed =
-        ref.watch(sellerProductsProvider(JualScreen.sellerId)).value ??
-        const <Product>[];
+        ref.watch(sellerProductsProvider(sellerId)).value ?? const <Product>[];
     final List<Product> visible = _visible(listed);
     final bool isSeller = ref.watch(accountModeProvider) == AccountMode.seller;
 
@@ -119,70 +121,73 @@ class _JualScreenState extends ConsumerState<JualScreen> {
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          SellerIdentity(seller: seller),
-          const SizedBox(height: 12),
-          Text(
-            seller.bio,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.5,
-              color: KosplyColors.textSecondaryOf(context),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: KosplySearchbar(
-                  key: const Key('jual-search'),
-                  hint: 'Cari barang jualan...',
-                  showFilter: false,
-                  onChanged: (String value) {
-                    setState(() => _query = value);
-                  },
-                ),
+      body: UiBridgeScope(
+        screen: 'jual',
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+          children: [
+            SellerIdentity(seller: seller),
+            const SizedBox(height: 12),
+            Text(
+              seller.bio,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: KosplyColors.textSecondaryOf(context),
               ),
-              if (isSeller) ...[
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: KosplySearchbar(
+                    key: const Key('jual-search'),
+                    hint: 'Cari barang jualan...',
+                    showFilter: false,
+                    onChanged: (String value) {
+                      setState(() => _query = value);
+                    },
+                  ),
+                ),
+                if (isSeller) ...[
+                  const SizedBox(width: 8),
+                  TintedIconButton(
+                    key: const Key('jual-analytic'),
+                    codePoint: PhosphorCode.chartBar,
+                    onPressed: _openAnalytic,
+                  ),
+                ],
                 const SizedBox(width: 8),
                 TintedIconButton(
-                  key: const Key('jual-analytic'),
-                  codePoint: PhosphorCode.chartBar,
-                  onPressed: _openAnalytic,
+                  key: const Key('jual-add'),
+                  codePoint: PhosphorCode.plus,
+                  onPressed: () => ProductCameraScreen.push(context),
                 ),
               ],
-              const SizedBox(width: 8),
-              TintedIconButton(
-                key: const Key('jual-add'),
-                codePoint: PhosphorCode.plus,
-                onPressed: () => ProductCameraScreen.push(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          FilterChipBar(
-            labels: _chipLabels(listed),
-            selected: _filter,
-            onSelected: (String label) => setState(() => _filter = label),
-          ),
-          const SizedBox(height: 16),
-          if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                'Belum ada barang di filter ini.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: KosplyColors.textSecondaryOf(context),
+            ),
+            const SizedBox(height: 16),
+            FilterChipBar(
+              labels: _chipLabels(listed),
+              selected: _filter,
+              onSelected: (String label) => setState(() => _filter = label),
+            ),
+            const SizedBox(height: 16),
+            if (visible.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Text(
+                  'Belum ada barang di filter ini.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: KosplyColors.textSecondaryOf(context),
+                  ),
                 ),
-              ),
-            )
-          else
-            ProductGrid(items: visible),
-        ],
+              )
+            else
+              ProductGrid(items: visible),
+          ],
+        ),
       ),
     );
   }

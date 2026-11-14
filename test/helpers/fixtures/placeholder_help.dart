@@ -7,12 +7,12 @@ library;
 
 import 'package:drift/drift.dart';
 
-import '../../core/database/app_database.dart';
-import '../../models/catalog/seller.dart';
-import '../../models/chat/conversation.dart';
-import '../../models/support/help_topic.dart';
-import '../../models/support/support_ticket.dart';
-import '../shared/local_user.dart';
+import 'package:kosply_mobile/core/database/app_database.dart';
+import 'package:kosply_mobile/models/catalog/seller.dart';
+import 'package:kosply_mobile/models/chat/conversation.dart';
+import 'package:kosply_mobile/models/support/help_topic.dart';
+import 'package:kosply_mobile/models/support/support_ticket.dart';
+import 'local_user.dart';
 
 /// @title PlaceholderHelp
 /// @notice Fake data source for Help desk and Contact support.

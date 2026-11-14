@@ -22,6 +22,7 @@ class KosplySearchbar extends StatelessWidget {
     this.showFilter = true,
     this.onChanged,
     this.controller,
+    this.focusNode,
     super.key,
   });
 
@@ -37,12 +38,16 @@ class KosplySearchbar extends StatelessWidget {
   /// @dev Optional text controller for the editable field.
   final TextEditingController? controller;
 
+  /// @dev Optional focus node so the AI can focus this field.
+  final FocusNode? focusNode;
+
   /// @notice Builds the search pill.
   /// @param context The build context.
   /// @return The search widget.
   @override
   Widget build(BuildContext context) {
-    final bool editable = onChanged != null || controller != null;
+    final bool editable =
+        onChanged != null || controller != null || focusNode != null;
     final Color hintColor = KosplyColors.textSecondaryOf(context);
 
     return Container(
@@ -61,6 +66,7 @@ class KosplySearchbar extends StatelessWidget {
             child: editable
                 ? TextField(
                     controller: controller,
+                    focusNode: focusNode,
                     onChanged: onChanged,
                     cursorColor: KosplyColors.primary,
                     style: TextStyle(

@@ -63,13 +63,16 @@ class FormStep {
   /// @notice Builds a password step.
   /// @param title Heading shown above the field.
   /// @param helper Help text under the card.
+  /// @param minLength Minimum number of characters. Reset uses 8 because the
+  /// server rejects a shorter new password.
   /// @return The password {FormStep}.
   FormStep.password({
     this.title = 'Lock it down',
     this.helper =
         'At least 6 characters. Mix in a number so nobody can guess it.',
+    int minLength = 6,
   }) : hint = 'Something only you know',
-       validator = FormValidators.password(),
+       validator = FormValidators.password(minLength: minLength),
        keyboardType = null,
        obscure = true,
        isCodeStep = false;
@@ -171,7 +174,7 @@ class FormValidators {
   /// @param length Number of digits in the code.
   /// @return A validator for the verification code step.
   static String? Function(String) code({int length = 4}) {
-    final pattern = RegExp(r'^\d{' + length.toString() + r'\}$');
+    final pattern = RegExp('^\\d{$length}\$');
     return (value) => pattern.hasMatch(value.trim())
         ? null
         : 'That code is not $length digits yet. Check and try again.';

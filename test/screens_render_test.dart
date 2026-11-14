@@ -8,8 +8,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/data/catalog/placeholder_catalog.dart';
 import 'package:kosply_mobile/layouts/main_layout.dart';
+import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 import 'package:kosply_mobile/main.dart';
 import 'package:kosply_mobile/screens/auth/forgot_password/forgot_password_screen.dart';
 import 'package:kosply_mobile/screens/main/home/home_screen.dart';
@@ -38,6 +38,7 @@ import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
 import 'package:kosply_mobile/widgets/common/brand/kosply_wordmark.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 
+import 'helpers/fixtures/placeholder_catalog.dart';
 import 'helpers/kosply_test_app.dart';
 
 /// @notice Screen-by-screen render checks.
@@ -58,7 +59,7 @@ void main() {
     'seller detail': const SellerDetailScreen(sellerId: 'seller-1'),
     'search': const SearchScreen(),
     'inbox': const InboxScreen(),
-    'chat detail': const ChatDetailScreen(sellerId: 'seller-1'),
+    'chat detail': const ChatDetailScreen(conversationId: 'seller-1'),
     'jual': const JualScreen(),
     'add product': const AddProductScreen(),
     'profile setting': const ProfileSettingScreen(),
@@ -127,7 +128,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await pumpKosplyApp(tester, const HomeScreen());
+    await pumpKosplyApp(tester, const AiOverlayLayer(child: HomeScreen()));
 
     expect(find.byType(ProductGrid), findsWidgets);
     expect(find.byKey(const Key('ai-fab')), findsOneWidget);
@@ -158,7 +159,6 @@ void main() {
     await tester.tap(find.text('Search'));
     await tester.pumpAndSettle();
     expect(find.byType(SearchScreen), findsOneWidget);
-    expect(find.text('Riwayat pencarian'), findsOneWidget);
     expect(find.text('Dibuka terakhir'), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right), findsNothing);
 

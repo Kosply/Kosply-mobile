@@ -15,6 +15,7 @@ import '../../../models/auth/auth_session.dart';
 import '../../../providers/account/account_mode_provider.dart';
 import '../../../providers/account/session_provider.dart';
 import '../../../providers/settings/theme_mode_provider.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/settings/account/account_mode_switch.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -25,7 +26,9 @@ import '../app/app_setting_screen.dart';
 import '../../support/contact/contact_support_screen.dart';
 import '../../main/favorite/favorite_screen.dart';
 import '../../support/help/help_desk_screen.dart';
+import '../notifications/notification_inbox_screen.dart';
 import '../profile/profile_setting_screen.dart';
+import '../verification/verification_screen.dart';
 
 /// @title SettingsScreen
 /// @notice Settings hub shown on the Profil tab.
@@ -58,129 +61,145 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
-      body: ListView(
-        key: const Key('settings-scroll'),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Setting',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: KosplyColors.textPrimaryOf(context),
+      body: UiBridgeScope(
+        screen: 'profile',
+        child: ListView(
+          key: const Key('settings-scroll'),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Setting',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: KosplyColors.textPrimaryOf(context),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              const AccountModeSwitch(),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isSeller
-                ? 'Mode penjual · jual barang kos ke mahasiswa di kampusmu.'
-                : 'Mode pembeli · belanja barang bekas dari mahasiswa sekitar.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.35,
-              color: KosplyColors.textSecondaryOf(context),
+                const SizedBox(width: 12),
+                const AccountModeSwitch(),
+              ],
             ),
-          ),
-          if (session != null) ...[
             const SizedBox(height: 6),
             Text(
-              'Masuk sebagai ${session.email} · ${session.isGoogle ? 'Google' : 'Email'}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              isSeller
+                  ? 'Mode penjual · jual barang kos ke mahasiswa di kampusmu.'
+                  : 'Mode pembeli · belanja barang bekas dari mahasiswa sekitar.',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.35,
-                fontWeight: FontWeight.w600,
-                color: KosplyColors.primary,
+                color: KosplyColors.textSecondaryOf(context),
               ),
             ),
-          ],
-          const SizedBox(height: 24),
-          _CategoryHeading('General'),
-          const SizedBox(height: 10),
-          SettingsSectionCard(
-            children: [
-              SettingsTile(
-                icon: PhosphorCode.user,
-                title: 'Profile setting',
-                description: 'Nama, foto, dan data kampus buat transaksi antar mahasiswa.',
-                onTap: () => ProfileSettingScreen.push(context),
-              ),
-              SettingsTile(
-                icon: isDark ? PhosphorCode.sun : PhosphorCode.moon,
-                title: 'Dark mode',
-                description:
-                    'Tampilan gelap, nyaman cek barang kos sampai malam.',
-                onTap: () =>
-                    ref.read(themeModeProvider.notifier).setDark(!isDark),
-                trailing: Switch.adaptive(
-                  value: isDark,
-                  activeTrackColor: KosplyColors.primary,
-                  onChanged: (bool value) {
-                    ref.read(themeModeProvider.notifier).setDark(value);
-                  },
+            if (session != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Masuk sebagai ${session.email} · ${session.providerLabel}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                  color: KosplyColors.primary,
                 ),
               ),
-              SettingsTile(
-                icon: PhosphorCode.gear,
-                title: 'setting',
-                description: 'Notifikasi, privasi, dan preferensi akun Kosply.',
-                onTap: () => AppSettingScreen.push(context),
-              ),
             ],
-          ),
-          const SizedBox(height: 24),
-          _CategoryHeading('Aktivitas'),
-          const SizedBox(height: 10),
-          SettingsSectionCard(
-            children: [
-              SettingsTile(
-                icon: PhosphorCode.heart,
-                title: 'Favorite',
-                description: 'Simpan barang bekas yang mau kamu ambil nanti.',
-                onTap: () => FavoriteScreen.push(context),
-              ),
-              if (isSeller)
+            const SizedBox(height: 24),
+            _CategoryHeading('General'),
+            const SizedBox(height: 10),
+            SettingsSectionCard(
+              children: [
                 SettingsTile(
-                  icon: PhosphorCode.chartBar,
-                  title: 'Analytic',
-                  description:
-                      'Pantau view, minat, dan performa jualan di kampus.',
-                  onTap: () => AnalyticScreen.push(context),
+                  icon: PhosphorCode.user,
+                  title: 'Profile setting',
+                  description: 'Nama, foto, dan data kampus buat transaksi antar mahasiswa.',
+                  onTap: () => ProfileSettingScreen.push(context),
                 ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _CategoryHeading('Support'),
-          const SizedBox(height: 10),
-          SettingsSectionCard(
-            children: [
-              SettingsTile(
-                icon: PhosphorCode.question,
-                title: 'Help desk',
-                description:
-                    'Panduan aman jual-beli barang kos antar mahasiswa.',
-                onTap: () => HelpDeskScreen.push(context),
-              ),
-              SettingsTile(
-                icon: PhosphorCode.headset,
-                title: 'Contact support',
-                description: 'Hubungi tim Kosply kalau transaksi bermasalah.',
-                onTap: () => ContactSupportScreen.push(context),
-              ),
-            ],
-          ),
-        ],
+                SettingsTile(
+                  icon: isDark ? PhosphorCode.sun : PhosphorCode.moon,
+                  title: 'Dark mode',
+                  description:
+                      'Tampilan gelap, nyaman cek barang kos sampai malam.',
+                  onTap: () =>
+                      ref.read(themeModeProvider.notifier).setDark(!isDark),
+                  trailing: Switch.adaptive(
+                    value: isDark,
+                    activeTrackColor: KosplyColors.primary,
+                    onChanged: (bool value) {
+                      ref.read(themeModeProvider.notifier).setDark(value);
+                    },
+                  ),
+                ),
+                SettingsTile(
+                  icon: PhosphorCode.gear,
+                  title: 'setting',
+                  description:
+                      'Notifikasi, privasi, dan preferensi akun Kosply.',
+                  onTap: () => AppSettingScreen.push(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _CategoryHeading('Aktivitas'),
+            const SizedBox(height: 10),
+            SettingsSectionCard(
+              children: [
+                SettingsTile(
+                  icon: PhosphorCode.heart,
+                  title: 'Favorite',
+                  description: 'Simpan barang bekas yang mau kamu ambil nanti.',
+                  onTap: () => FavoriteScreen.push(context),
+                ),
+                SettingsTile(
+                  icon: PhosphorCode.bell,
+                  title: 'Notifikasi',
+                  description: 'Pesan dari chat, verifikasi, dan bantuan.',
+                  onTap: () => NotificationInboxScreen.push(context),
+                ),
+                SettingsTile(
+                  icon: PhosphorCode.user,
+                  title: 'Verifikasi kampus',
+                  description: 'Kirim NIM dan foto KTM supaya bisa jual.',
+                  onTap: () => VerificationScreen.push(context),
+                ),
+                if (isSeller)
+                  SettingsTile(
+                    icon: PhosphorCode.chartBar,
+                    title: 'Analytic',
+                    description:
+                        'Pantau view, minat, dan performa jualan di kampus.',
+                    onTap: () => AnalyticScreen.push(context),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _CategoryHeading('Support'),
+            const SizedBox(height: 10),
+            SettingsSectionCard(
+              children: [
+                SettingsTile(
+                  icon: PhosphorCode.question,
+                  title: 'Help desk',
+                  description:
+                      'Panduan aman jual-beli barang kos antar mahasiswa.',
+                  onTap: () => HelpDeskScreen.push(context),
+                ),
+                SettingsTile(
+                  icon: PhosphorCode.headset,
+                  title: 'Contact support',
+                  description: 'Hubungi tim Kosply kalau transaksi bermasalah.',
+                  onTap: () => ContactSupportScreen.push(context),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

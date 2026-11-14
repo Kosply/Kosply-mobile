@@ -4,12 +4,17 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/core/camera/listing_camera.dart';
 import 'package:kosply_mobile/core/camera/providers/camera_provider.dart';
+import 'package:kosply_mobile/data/uploads/upload_repository.dart';
+import 'package:kosply_mobile/providers/catalog/listing_draft_provider.dart';
 import 'package:kosply_mobile/providers/catalog/listing_photos_provider.dart';
+import 'package:kosply_mobile/providers/network/api_provider.dart';
 import 'package:kosply_mobile/screens/seller/product/add_product_screen.dart';
 import 'package:kosply_mobile/screens/seller/product/product_camera_screen.dart';
 
@@ -32,12 +37,26 @@ void main() {
     return pumpKosplyApp(
       tester,
       const ProductCameraScreen(),
-      routes: <String, WidgetBuilder>{
-        AddProductScreen.routeName: (_) => const AddProductScreen(),
+      onGenerateRoute: (RouteSettings settings) {
+        if (settings.name == AddProductScreen.routeName) {
+          return MaterialPageRoute<bool?>(
+            settings: settings,
+            builder: (_) => const AddProductScreen(),
+          );
+        }
+        return null;
       },
       container: await seededContainer(
         overrides: [
           listingCameraFactoryProvider.overrideWithValue(() => camera),
+          // Captures are fake paths. The form still uploads through the API.
+          uploadRepositoryProvider.overrideWith(
+            (ref) => UploadRepository(
+              api: ref.watch(apiClientProvider),
+              readBytes: (String path) async =>
+                  Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]),
+            ),
+          ),
         ],
       ),
     );

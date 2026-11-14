@@ -18,14 +18,29 @@ class ProductGrid extends StatelessWidget {
   /// @notice Creates a product grid.
   /// @param items Products to render.
   /// @param spacing Gap between cards horizontally and vertically.
+  /// @param anchor Whether each card keeps a scroll target for the AI.
+  /// Only one mounted card per product may anchor. Pushed screens leave this
+  /// off because the home tab stays underneath them.
   /// @return A new {ProductGrid} instance.
-  const ProductGrid({required this.items, this.spacing = 12, super.key});
+  const ProductGrid({
+    required this.items,
+    this.spacing = 12,
+    this.anchor = false,
+    this.eventSource = 'feed',
+    super.key,
+  });
 
   /// @dev Products to render.
   final List<Product> items;
 
   /// @dev Gap between cards horizontally and vertically.
   final double spacing;
+
+  /// @dev Whether each card keeps a scroll target for the AI.
+  final bool anchor;
+
+  /// @dev Analytics source for each card's impression.
+  final String eventSource;
 
   /// @notice Builds the grid.
   /// @param context The build context.
@@ -42,7 +57,11 @@ class ProductGrid extends StatelessWidget {
             for (final Product item in items)
               SizedBox(
                 width: width,
-                child: ProductCardTile(product: item),
+                child: ProductCardTile(
+                  product: item,
+                  anchor: anchor,
+                  eventSource: eventSource,
+                ),
               ),
           ],
         );

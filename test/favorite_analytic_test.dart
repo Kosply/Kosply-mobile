@@ -121,7 +121,7 @@ void main() {
       await pumpKosplyApp(tester, const AnalyticScreen());
 
       expect(find.byType(SellerAppBar), findsOneWidget);
-      expect(find.text('seller1'), findsOneWidget);
+      expect(find.text('Kamu'), findsOneWidget);
       expect(find.text('Views'), findsOneWidget);
       expect(find.text('1.284'), findsOneWidget);
       expect(find.text('Favorite'), findsOneWidget);

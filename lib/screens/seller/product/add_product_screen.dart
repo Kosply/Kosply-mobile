@@ -3,22 +3,28 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/catalog/listing_card.dart';
 import '../../../models/catalog/listing_photos.dart';
-import '../../../models/catalog/product.dart';
+import '../../../providers/catalog/listing_draft_provider.dart';
 import '../../../providers/catalog/listing_photos_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
-import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @title AddProductScreen
 /// @notice New listing form opened from the product camera's Lanjut button.
 /// @dev Shows the photos captured in {ProductCameraScreen}, which stays below
-/// this route so "Ubah foto" just pops back to it.
+/// this route so "Ubah foto" just pops back to it. On open the photos are
+/// uploaded and the AI fills name, category and description from them
+/// (`agent_spec/tables/listing.md`); those three fields are locked so the
+/// listing always matches its photos. The seller types price, location and
+/// quantity, then `POST /api/products` publishes it.
 class AddProductScreen extends ConsumerStatefulWidget {
   /// @notice Creates the add-product screen.
   /// @return A new {AddProductScreen} instance.
@@ -29,9 +35,9 @@ class AddProductScreen extends ConsumerStatefulWidget {
 
   /// @notice Pushes this screen onto the current route stack.
   /// @param context The build context.
-  /// @return Future completing when the screen is popped.
-  static Future<void> push(BuildContext context) {
-    return Navigator.of(context).pushNamed(routeName);
+  /// @return True when the listing was published.
+  static Future<bool?> push(BuildContext context) {
+    return Navigator.of(context).pushNamed<bool>(routeName);
   }
 
   /// @notice Creates the mutable form state.
@@ -41,14 +47,24 @@ class AddProductScreen extends ConsumerStatefulWidget {
 }
 
 /// @title _AddProductScreenState
-/// @notice Holds listing fields until a product API is wired up.
+/// @notice Holds the seller's fields and mirrors the AI card into the locked
+/// ones.
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _price = TextEditingController();
   final TextEditingController _location = TextEditingController();
   final TextEditingController _quantity = TextEditingController(text: '1');
+  final TextEditingController _category = TextEditingController();
   final TextEditingController _description = TextEditingController();
-  String _category = Product.categories.first;
+  String? _formError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Provider writes are not allowed while the tree builds, so the upload
+    // starts right after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
 
   /// @notice Releases the field controllers.
   /// @return void
@@ -58,8 +74,51 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     _price.dispose();
     _location.dispose();
     _quantity.dispose();
+    _category.dispose();
     _description.dispose();
     super.dispose();
+  }
+
+  void _start() {
+    if (!mounted) {
+      return;
+    }
+    final List<String> photos = ref.read(listingPhotosProvider).paths;
+    unawaited(ref.read(listingDraftProvider.notifier).start(photos));
+  }
+
+  void _fill(ListingCard card) {
+    _title.text = card.title;
+    _category.text = card.category;
+    _description.text = card.description;
+  }
+
+  /// @notice Reads digits only, so "Rp.375.000" and "375000" both work.
+  /// @param text Field text.
+  /// @return The integer, or null when there are no digits.
+  int? _digits(String text) {
+    final String digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.isEmpty ? null : int.tryParse(digits);
+  }
+
+  Future<void> _publish() async {
+    final int? price = _digits(_price.text);
+    final int stock = _digits(_quantity.text) ?? 0;
+    if (price == null) {
+      setState(() => _formError = 'Isi harga barang dulu.');
+      return;
+    }
+    if (stock < 1) {
+      setState(() => _formError = 'Kuantitas minimal 1.');
+      return;
+    }
+    setState(() => _formError = null);
+    final bool published = await ref
+        .read(listingDraftProvider.notifier)
+        .publish(price: price, stock: stock, location: _location.text.trim());
+    if (published && mounted) {
+      Navigator.of(context).pop(true);
+    }
   }
 
   /// @notice Builds the stacked listing form.
@@ -69,6 +128,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   Widget build(BuildContext context) {
     final Color onShell = KosplyColors.textPrimaryOf(context);
     final List<String> photos = ref.watch(listingPhotosProvider).paths;
+    final ListingDraft draft = ref.watch(listingDraftProvider);
+    ref.listen<ListingDraft>(listingDraftProvider, (
+      ListingDraft? previous,
+      ListingDraft next,
+    ) {
+      final ListingCard? card = next.card;
+      if (card != null && previous?.card != card) {
+        _fill(card);
+      }
+    });
+    final bool locked = !draft.hasCard;
+    final bool canPublish =
+        draft.status == ListingDraftStatus.ready && !draft.isBusy;
+    final String? error = _formError ?? draft.error;
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -117,12 +190,19 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 paths: photos,
                 onEdit: () => Navigator.of(context).maybePop(),
               ),
+            const SizedBox(height: 12),
+            _AiStatusBanner(
+              draft: draft,
+              hasPhotos: photos.isNotEmpty,
+              onRetry: _start,
+            ),
             const SizedBox(height: 20),
             _LabeledField(
               label: 'Nama barang',
-              hint: 'Meja belajar lipat',
+              hint: locked ? 'Menunggu AI…' : 'Meja belajar lipat',
               controller: _title,
               fieldKey: const Key('add-product-title'),
+              locked: true,
             ),
             const SizedBox(height: 16),
             _LabeledField(
@@ -131,6 +211,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               controller: _price,
               fieldKey: const Key('add-product-price'),
               keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
             ),
             const SizedBox(height: 16),
             _LabeledField(
@@ -146,30 +229,37 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               controller: _quantity,
               fieldKey: const Key('add-product-quantity'),
               keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
             ),
             const SizedBox(height: 16),
-            Text(
-              'Kategori',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: KosplyColors.textPrimaryOf(context),
-              ),
-            ),
-            const SizedBox(height: 8),
-            FilterChipBar(
-              labels: Product.categories,
-              selected: _category,
-              onSelected: (String label) => setState(() => _category = label),
+            _LabeledField(
+              label: 'Kategori',
+              hint: locked ? 'Menunggu AI…' : 'Kategori',
+              controller: _category,
+              fieldKey: const Key('add-product-category'),
+              locked: true,
             ),
             const SizedBox(height: 16),
             _LabeledField(
               label: 'Deskripsi',
-              hint: 'Kondisi barang, kelengkapan, dan cara ketemu di kampus.',
+              hint: locked
+                  ? 'Menunggu AI…'
+                  : 'Kondisi barang, kelengkapan, dan cara ketemu di kampus.',
               controller: _description,
               fieldKey: const Key('add-product-description'),
               maxLines: 4,
+              locked: true,
             ),
+            if (error != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                error,
+                key: const Key('add-product-error'),
+                style: const TextStyle(fontSize: 13, color: KosplyColors.error),
+              ),
+            ],
           ],
         ),
       ),
@@ -183,23 +273,134 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               height: 52,
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Navigator.of(context).maybePop(),
+                key: const Key('add-product-submit'),
+                onPressed: canPublish ? _publish : null,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: KosplyColors.primary,
+                  disabledBackgroundColor: KosplyColors.primary.withValues(
+                    alpha: 0.4,
+                  ),
+                  disabledForegroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Pasang barang',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
+                child: draft.status == ListingDraftStatus.publishing
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Pasang barang',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// @title _AiStatusBanner
+/// @notice Says what the AI is doing with the photos, or why it stopped.
+class _AiStatusBanner extends StatelessWidget {
+  const _AiStatusBanner({
+    required this.draft,
+    required this.hasPhotos,
+    required this.onRetry,
+  });
+
+  final ListingDraft draft;
+  final bool hasPhotos;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final String message;
+    switch (draft.status) {
+      case ListingDraftStatus.idle:
+        message = hasPhotos
+            ? 'Menyiapkan foto…'
+            : 'Ambil ${ListingPhotos.required} foto barang dulu, nanti AI '
+                  'mengisi nama, kategori, dan deskripsi.';
+      case ListingDraftStatus.uploading:
+        message = 'Mengunggah foto ${draft.uploaded}/${draft.total}…';
+      case ListingDraftStatus.filling:
+        message = 'AI sedang membaca foto barang…';
+      case ListingDraftStatus.ready:
+      case ListingDraftStatus.publishing:
+      case ListingDraftStatus.published:
+        message =
+            'Diisi AI dari foto. Nama, kategori, dan deskripsi dikunci; '
+            'kamu tinggal isi harga, lokasi, dan kuantitas.';
+      case ListingDraftStatus.failed:
+        message = draft.error ?? 'AI belum bisa mengisi. Coba lagi.';
+    }
+    final bool failed = draft.status == ListingDraftStatus.failed;
+    final bool working =
+        draft.status == ListingDraftStatus.uploading ||
+        draft.status == ListingDraftStatus.filling ||
+        (draft.status == ListingDraftStatus.idle && hasPhotos);
+
+    return Container(
+      key: const Key('add-product-ai-status'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: (failed ? KosplyColors.error : KosplyColors.primary).withValues(
+          alpha: 0.08,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (working)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: KosplyColors.primary,
+              ),
+            )
+          else
+            PhosphorGlyph(
+              PhosphorCode.brain,
+              size: 18,
+              color: failed ? KosplyColors.error : KosplyColors.primary,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: KosplyColors.textPrimaryOf(context),
+              ),
+            ),
+          ),
+          if (failed && hasPhotos)
+            TextButton(
+              key: const Key('add-product-retry'),
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                foregroundColor: KosplyColors.primary,
+              ),
+              child: const Text('Coba lagi'),
+            ),
+        ],
       ),
     );
   }
@@ -330,6 +531,7 @@ class _PhotoTile extends StatelessWidget {
 
 /// @title _LabeledField
 /// @notice Label stacked above an outlined text field.
+/// @dev A [locked] field is filled by the AI and cannot be edited.
 class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
@@ -337,7 +539,9 @@ class _LabeledField extends StatelessWidget {
     required this.controller,
     required this.fieldKey,
     this.keyboardType,
+    this.inputFormatters,
     this.maxLines = 1,
+    this.locked = false,
   });
 
   final String label;
@@ -345,26 +549,50 @@ class _LabeledField extends StatelessWidget {
   final TextEditingController controller;
   final Key fieldKey;
   final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
   final int maxLines;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: KosplyColors.textPrimaryOf(context),
-          ),
+        Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: KosplyColors.textPrimaryOf(context),
+              ),
+            ),
+            if (locked) ...[
+              const SizedBox(width: 6),
+              PhosphorGlyph(
+                PhosphorCode.lockSimple,
+                size: 12,
+                color: KosplyColors.textSecondaryOf(context),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Diisi AI',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: KosplyColors.textSecondaryOf(context),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
-            color: KosplyColors.surfaceOf(context),
+            color: locked
+                ? KosplyColors.outlineOf(context).withValues(alpha: 0.25)
+                : KosplyColors.surfaceOf(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: KosplyColors.outlineOf(context)),
           ),
@@ -372,6 +600,9 @@ class _LabeledField extends StatelessWidget {
             key: fieldKey,
             controller: controller,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            readOnly: locked,
+            enableInteractiveSelection: !locked,
             maxLines: maxLines,
             cursorColor: KosplyColors.primary,
             style: TextStyle(

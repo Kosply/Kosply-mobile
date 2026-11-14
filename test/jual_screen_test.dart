@@ -58,14 +58,19 @@ void main() {
     await pumpJual(tester);
 
     expect(find.byType(SellerIdentity), findsOneWidget);
-    expect(find.text('seller1'), findsOneWidget);
-    expect(find.textContaining('Lorem ipsum dolor sit amet'), findsOneWidget);
+    expect(find.text('Kamu'), findsOneWidget);
+    expect(
+      find.textContaining('Lagi beres-beres kos'),
+      findsOneWidget,
+    );
     expect(find.text('Cari barang jualan...'), findsOneWidget);
     expect(find.byKey(const Key('jual-analytic')), findsNothing);
     expect(find.byKey(const Key('jual-add')), findsOneWidget);
     expect(find.text('Semua'), findsOneWidget);
-    expect(find.byType(ProductGrid), findsOneWidget);
-    expect(find.text('Meja belajar lipat'), findsOneWidget);
+    // This student has not published a listing, so the shelf stays empty.
+    expect(find.text('Belum ada barang di filter ini.'), findsOneWidget);
+    expect(find.byType(ProductGrid), findsNothing);
+    expect(find.text('Meja belajar lipat'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -77,7 +82,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('jual-search')), 'Meja');
     await tester.pump();
 
-    expect(find.text('Meja belajar lipat'), findsOneWidget);
+    // The signed-in shelf is empty; other sellers' listings stay off it.
+    expect(find.text('Meja belajar lipat'), findsNothing);
     expect(find.text('Lampu belajar LED'), findsNothing);
   });
 

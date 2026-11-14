@@ -44,6 +44,11 @@ class Conversations extends Table with CacheMarker {
   /// @dev UTC millis of the last backend update to the row.
   IntColumn get backendUpdatedAt => integer().withDefault(const Constant(0))();
 
+  /// @dev The signed-in student's unread count from the backend inbox.
+  /// @dev Stored rather than counted from cached bubbles: the inbox only
+  /// downloads each room's newest message, not the whole thread.
+  IntColumn get unreadCount => integer().withDefault(const Constant(0))();
+
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
 }
