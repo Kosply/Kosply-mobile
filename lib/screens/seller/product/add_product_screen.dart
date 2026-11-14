@@ -3,16 +3,23 @@
 /// @author Kosply-mobile
 library;
 
-import 'package:flutter/material.dart';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../models/catalog/listing_photos.dart';
 import '../../../models/catalog/product.dart';
+import '../../../providers/catalog/listing_photos_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @title AddProductScreen
-/// @notice New listing form opened from the Jual plus button.
-class AddProductScreen extends StatefulWidget {
+/// @notice New listing form opened from the product camera's Lanjut button.
+/// @dev Shows the photos captured in {ProductCameraScreen}, which stays below
+/// this route so "Ubah foto" just pops back to it.
+class AddProductScreen extends ConsumerStatefulWidget {
   /// @notice Creates the add-product screen.
   /// @return A new {AddProductScreen} instance.
   const AddProductScreen({super.key});
@@ -30,12 +37,12 @@ class AddProductScreen extends StatefulWidget {
   /// @notice Creates the mutable form state.
   /// @return The {_AddProductScreenState} instance.
   @override
-  State<AddProductScreen> createState() => _AddProductScreenState();
+  ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
 }
 
 /// @title _AddProductScreenState
 /// @notice Holds listing fields until a product API is wired up.
-class _AddProductScreenState extends State<AddProductScreen> {
+class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _price = TextEditingController();
   final TextEditingController _location = TextEditingController();
@@ -61,6 +68,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   Widget build(BuildContext context) {
     final Color onShell = KosplyColors.textPrimaryOf(context);
+    final List<String> photos = ref.watch(listingPhotosProvider).paths;
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -86,23 +94,29 @@ class _AddProductScreenState extends State<AddProductScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              key: const Key('add-product-photo'),
-              height: 160,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: KosplyColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: KosplyColors.outlineOf(context)),
-              ),
-              child: const Center(
-                child: PhosphorGlyph(
-                  PhosphorCode.plus,
-                  size: 28,
-                  color: KosplyColors.primary,
+            if (photos.isEmpty)
+              Container(
+                key: const Key('add-product-photo'),
+                height: 160,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: KosplyColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: KosplyColors.outlineOf(context)),
                 ),
+                child: const Center(
+                  child: PhosphorGlyph(
+                    PhosphorCode.plus,
+                    size: 28,
+                    color: KosplyColors.primary,
+                  ),
+                ),
+              )
+            else
+              _PhotoStrip(
+                paths: photos,
+                onEdit: () => Navigator.of(context).maybePop(),
               ),
-            ),
             const SizedBox(height: 20),
             _LabeledField(
               label: 'Nama barang',
@@ -186,6 +200,129 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// @title _PhotoStrip
+/// @notice Captured listing photos in a horizontal row, the first as cover.
+class _PhotoStrip extends StatelessWidget {
+  const _PhotoStrip({required this.paths, required this.onEdit});
+
+  final List<String> paths;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Foto (${paths.length}/${ListingPhotos.required})',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: KosplyColors.textPrimaryOf(context),
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              key: const Key('add-product-edit-photos'),
+              onPressed: onEdit,
+              style: TextButton.styleFrom(
+                foregroundColor: KosplyColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Ubah foto',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 104,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: paths.length,
+            separatorBuilder: (BuildContext context, int index) =>
+                const SizedBox(width: 8),
+            itemBuilder: (BuildContext context, int index) => _PhotoTile(
+              key: Key('add-product-photo-$index'),
+              path: paths[index],
+              isCover: index == 0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// @title _PhotoTile
+/// @notice Square photo thumbnail; the cover gets an outline and badge.
+class _PhotoTile extends StatelessWidget {
+  const _PhotoTile({required this.path, required this.isCover, super.key});
+
+  final String path;
+  final bool isCover;
+
+  @override
+  Widget build(BuildContext context) {
+    final BorderRadius radius = BorderRadius.circular(12);
+
+    return SizedBox(
+      width: 104,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: radius,
+            child: Image.file(
+              File(path),
+              fit: BoxFit.cover,
+              cacheWidth: 320,
+              errorBuilder: (
+                BuildContext context,
+                Object error,
+                StackTrace? stack,
+              ) => ColoredBox(color: KosplyColors.outlineOf(context)),
+            ),
+          ),
+          if (isCover) ...[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: KosplyColors.primary, width: 2),
+              ),
+            ),
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: KosplyColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Cover',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

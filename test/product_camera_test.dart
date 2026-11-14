@@ -118,7 +118,7 @@ void main() {
     ]);
   });
 
-  testWidgets('Lanjut opens the form and back keeps the photos', (
+  testWidgets('Lanjut shows the photos in the form; Ubah foto goes back', (
     WidgetTester tester,
   ) async {
     final FakeListingCamera camera = FakeListingCamera();
@@ -130,9 +130,14 @@ void main() {
 
     expect(find.byType(AddProductScreen), findsOneWidget);
     expect(find.text('Tambah barang'), findsOneWidget);
+    expect(find.text('Foto (5/5)'), findsOneWidget);
+    expect(find.text('Cover'), findsOneWidget);
+    expect(find.byKey(const Key('add-product-photo-0')), findsOneWidget);
+    expect(find.byKey(const Key('add-product-photo')), findsNothing);
     expect(camera.isOpen, isFalse);
+    expect(tester.takeException(), isNull);
 
-    Navigator.of(tester.element(find.byType(AddProductScreen))).pop();
+    await tester.tap(find.byKey(const Key('add-product-edit-photos')));
     await tester.pumpAndSettle();
 
     expect(find.byType(ProductCameraScreen), findsOneWidget);
