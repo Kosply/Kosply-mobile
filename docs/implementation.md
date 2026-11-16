@@ -6,9 +6,11 @@ shared_preferences, penyimpanan rahasia dengan flutter_secure_storage, sampai
 sesi login dan alur Google sign-up. Semua data yang tampil di UI berasal dari
 cache lokal. UI berlangganan `Stream` Drift (`.watch()`), jadi begitu cache
 berubah, layar otomatis re-render tanpa perlu menunggu koneksi ke backend.
-Aliran datanya satu arah dan tidak pernah dilangkahi: **Drift (tabel) → DAO →
-Repository → Provider → Widget**, sehingga widget tidak pernah menyentuh
-database secara langsung.
+
+Cache itu diisi dari [Kosply-backend](https://github.com/Kosply/Kosply-backend).
+Aliran datanya satu arah dan tidak pernah dilangkahi: **API → Repository →
+Drift (tabel, DAO) → Provider → Widget**. Widget tidak pernah menyentuh HTTP
+maupun database secara langsung.
 
 ## 1. Database Drift
 
@@ -65,8 +67,25 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor openDefault() => driftDatabase(name: 'kosply_mobile');
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 }
+```
+
+Skema sekarang di versi 2. Versi 2 menambahkan kolom
+`conversations.unreadCount`, karena jumlah pesan belum dibaca kini dikirim
+server di setiap baris inbox. Migrasinya hanya menambah kolom, jadi cache
+milik pengguna versi 1 tidak hilang.
+
+**File: `lib/core/database/app_database.dart:62`**
+
+```dart
+MigrationStrategy get migration => MigrationStrategy(
+  onUpgrade: (Migrator m, int from, int to) async {
+    if (from < 2) {
+      await m.addColumn(conversations, conversations.unreadCount);
+    }
+  },
+);
 ```
 
 Di dalam DAO, setiap query reaktif punya pasangan "sekali baca". Versi stream
@@ -123,23 +142,49 @@ Future<void> replaceConversations({
 }
 ```
 
-Karena backend belum tersambung, isi cache awal dibuat oleh `AppSeeder` saat
-start-up. Setiap repository punya guard "cache kosong?" sendiri
-(`ensureSeeded()`), sehingga seed hanya berjalan sekali dan aman dipanggil
-berulang. Data placeholder ditulis lewat transaksi yang sama seperti refresh
-backend nanti, jadi mengganti seeder dengan hasil fetch API tidak akan
-mengubah kode DAO maupun UI.
+Isi cache berasal dari backend. Setiap repository punya method `refresh*`
+yang memanggil API lewat `ApiClient`, memetakan JSON ke companion Drift, lalu
+menulisnya lewat transaksi DAO di atas. Contohnya katalog:
 
-**File: `lib/data/shared/app_seeder.dart:45`**
+**File: `lib/data/catalog/catalog_repository.dart:90`**
 
 ```dart
-Future<void> seedIfEmpty() async {
-  await catalog.ensureSeeded();
-  await inbox.ensureSeeded();
-  await support.ensureSeeded();
-  await aiChat.ensureSeeded();
+Future<void> refresh() async {
+  final Map<String, dynamic> json = await api.get(
+    '/api/products',
+    query: <String, String>{'limit': '$pageSize'},
+    auth: false,
+  );
+  final List<Map<String, dynamic>> items = json.objects('items');
+  final int now = utcMillisNow();
+  await dao.replaceCatalog(
+    userRows: _sellerRows(items, now),
+    productRows: <ProductsCompanion>[
+      for (final Map<String, dynamic> item in items) _productRow(item, now),
+    ],
+    fetchedAt: now,
+  );
 }
 ```
+
+`AppSync` menjalankan semua refresh itu di satu tempat. Data publik (katalog
+dan FAQ) selalu ditarik; data pribadi (profil, favorit, inbox, tiket, riwayat
+AI) hanya ditarik bila ada sesi. Setiap langkah menelan `ApiException`
+sendiri-sendiri, jadi satu route yang gagal atau tidak ada jaringan sama
+sekali hanya berarti cache terakhir tetap tampil.
+
+**File: `lib/data/shared/app_sync.dart:57`**
+
+```dart
+Future<void> syncAll() async {
+  await syncPublic();
+  await syncAccount();
+}
+```
+
+Selain sinkronisasi saat start-up dan setelah login, layar yang dibuka
+menyegarkan datanya sendiri lewat provider `*SyncProvider` (misalnya
+`catalogSyncProvider`, `productSyncProvider`, `inboxSyncProvider`).
 
 ## 2. Dua Jenis Penyimpanan
 
@@ -157,13 +202,16 @@ antara penulis dan pembaca nilai.
 abstract final class StorageKeys {
   static const String themeDark = 'settings.theme_dark';
   static const String accountMode = 'settings.account_mode';
-  // ...
+  // ... settings.notification.*
   static const String accessToken = 'auth.access_token';
   static const String refreshToken = 'auth.refresh_token';
   static const String authEmail = 'auth.email';
   static const String authDisplayName = 'auth.display_name';
   static const String authProvider = 'auth.provider';
   static const String authOnboarding = 'auth.onboarding_required';
+  static const String authUserId = 'auth.user_id';
+  static const String authUsername = 'auth.username';
+  static const String authRole = 'auth.role';
 }
 ```
 
@@ -190,18 +238,21 @@ Future<String?> read(String key) async {
 }
 ```
 
-Password pengguna tidak pernah disimpan di device. Password hanya diminta
-saat sign-in dan nanti diverifikasi oleh backend ketika endpoint auth
-tersambung.
+Password pengguna tidak pernah disimpan di device. Password dikirim sekali
+ke `POST /api/auth/login` atau `/api/auth/register`, dan yang disimpan
+hanyalah pasangan token yang dikembalikan server.
 
 ## 3. Sesi Login
 
 Sesi direpresentasikan model `AuthSession` yang membawa email, display name,
 provider (`google` atau `email`), pasangan token, dan flag
-`onboardingRequired` (apakah data kampus masih perlu diisi). Flag inilah yang
-membuat splash bisa membedakan user baru dari user yang sesinya sudah lengkap.
+`onboardingRequired` (apakah data kampus masih perlu diisi). Sejak tersambung
+ke backend, sesi juga membawa `userId` (`users.id` di server), `username`,
+dan `role`. `userId` dipakai setiap pengecekan "ini milik saya?" — bubble
+chat dan etalase penjual sendiri — sedangkan `role` menentukan boleh tidaknya
+memasang barang.
 
-**File: `lib/models/auth/auth_session.dart:10`**
+**File: `lib/models/auth/auth_session.dart:25`**
 
 ```dart
 enum AuthProvider { google, email }
@@ -214,32 +265,27 @@ class AuthSession {
     required this.accessToken,
     required this.refreshToken,
     this.onboardingRequired = false,
+    this.userId = '',
+    this.username = '',
+    this.role = 'BUYER',
   });
-
-  final String email;
-  final String displayName;
-  final AuthProvider provider;
-  final String accessToken;
-  final String refreshToken;
-  final bool onboardingRequired;
 
   bool get isGoogle => provider == AuthProvider.google;
 
-  AuthSession copyWith({bool? onboardingRequired}) { /* ... */ }
+  bool get canSell =>
+      role == 'SELLER' || role == 'ADMIN' || role == 'SUPER_ADMIN';
 }
 ```
 
-`SessionRepository` yang menulis dan membaca sesi ke `SecureStore`. Restore
-hanya mengembalikan sesi jika kedua token ada — sesi setengah jadi tidak
-pernah muncul di UI. Google sign-in saat ini adalah demo gateway dengan akun
-kampus tetap; ketika `google_sign_in` dan endpoint backend siap, hanya isi
-method ini yang berganti tanpa mengubah bentuk sesi atau routing. Logout
-menghapus seluruh key `auth.*` dari keystore.
+`SessionRepository` memanggil route `/api/auth/*` dan menyimpan hasilnya ke
+`SecureStore`. Restore hanya mengembalikan sesi jika kedua token ada — sesi
+setengah jadi tidak pernah muncul di UI. Method-nya statis supaya `main` bisa
+memulihkan sesi sebelum provider (dan `ApiClient`) ada.
 
-**File: `lib/data/account/session_repository.dart:37`**
+**File: `lib/data/account/session_repository.dart:42`**
 
 ```dart
-Future<AuthSession?> restore() async {
+static Future<AuthSession?> restoreFrom(SecureStore secure) async {
   final String? access = await secure.read(StorageKeys.accessToken);
   final String? refresh = await secure.read(StorageKeys.refreshToken);
   if (access == null || access.isEmpty ||
@@ -254,95 +300,101 @@ Future<AuthSession?> restore() async {
     refreshToken: refresh,
     onboardingRequired:
         await secure.read(StorageKeys.authOnboarding) == '1',
+    userId: await secure.read(StorageKeys.authUserId) ?? '',
+    username: await secure.read(StorageKeys.authUsername) ?? '',
+    role: await secure.read(StorageKeys.authRole) ?? 'BUYER',
   );
 }
 ```
 
-**File: `lib/data/account/session_repository.dart:62`**
+Google sign-in menukar id token dari `google_sign_in` dengan sesi Kosply.
+Server memverifikasi token itu terhadap client id OAuth bertipe web, sehingga
+aplikasi harus memintanya dengan id yang sama (`GOOGLE_SERVER_CLIENT_ID` di
+`.env`).
+
+**File: `lib/data/account/session_repository.dart:121`**
 
 ```dart
-Future<AuthSession> signInWithGoogle() {
-  return _persist(
-    AuthSession(
-      email: googleDemoEmail,
-      displayName: googleDemoName,
-      provider: AuthProvider.google,
-      accessToken: _issueToken('google'),
-      refreshToken: _issueToken('google-refresh'),
-      onboardingRequired: true,
-    ),
+Future<AuthSession> signInWithGoogle(String idToken) async {
+  final Map<String, dynamic> json = await api.post(
+    '/api/auth/google',
+    body: <String, String>{'idToken': idToken},
+    auth: false,
   );
-}
-
-Future<void> signOut() async {
-  await secure.delete(StorageKeys.accessToken);
-  await secure.delete(StorageKeys.refreshToken);
-  await secure.delete(StorageKeys.authEmail);
-  await secure.delete(StorageKeys.authDisplayName);
-  await secure.delete(StorageKeys.authProvider);
-  await secure.delete(StorageKeys.authOnboarding);
+  return _persist(_sessionFrom(json, AuthProvider.google));
 }
 ```
 
 Status login adalah state global lintas layar, jadi ia hidup di Riverpod.
 `SessionNotifier` memegang sesi aktif dan menjadi satu-satunya sumber yang
 dibaca semua layar; sign-in dan sign-out langsung memperbarui seluruh
-aplikasi. `completeRegistration` menyimpan nama dan username ke profil cache
-di Drift, lalu menutup flag onboarding pada sesi.
+aplikasi. Pemilih akun Google berada di balik `googleIdTokenSourceProvider`
+supaya widget test tidak pernah membuka dialog platform.
 
-**File: `lib/providers/account/session_provider.dart:24`**
+**File: `lib/providers/account/session_provider.dart:107`**
 
 ```dart
-class SessionNotifier extends Notifier<AuthSession?> {
-  SessionNotifier({this.initial});
-
-  final AuthSession? initial;
-
-  @override
-  AuthSession? build() => initial; // sesi hasil restore saat start-up
-
-  Future<void> signInWithGoogle() async {
-    state = await ref.read(sessionRepositoryProvider).signInWithGoogle();
-  }
-
-  /// Menyimpan nama + username ke profil cache, lalu menutup flag onboarding.
-  Future<void> completeRegistration({
-    required String name,
-    required String username,
-  }) async {
-    final UserProfile current = ref.read(profileProvider);
-    await ref.read(accountRepositoryProvider)
-        .saveProfile(current.copyWith(name: name, username: username));
-    final AuthSession? session = state;
-    if (session != null) {
-      state = await ref.read(sessionRepositoryProvider).markOnboarded(session);
-    }
-  }
-
-  Future<void> signOut() async {
-    await ref.read(sessionRepositoryProvider).signOut();
-    state = null;
-  }
+Future<AuthSession> signInWithGoogle() async {
+  final String idToken = await ref
+      .read(googleIdTokenSourceProvider)
+      .idToken();
+  final AuthSession session = await _repo.signInWithGoogle(idToken);
+  _publish(session);
+  return session;
 }
-
-final sessionProvider = NotifierProvider<SessionNotifier, AuthSession?>(
-  SessionNotifier.new,
-);
 ```
 
-Agar layar pertama sudah tahu status login, sesi dipulihkan dari keystore
-sebelum `runApp`, lalu disuntikkan lewat `overrideWith`. Setelah itu barulah
-cache di-seed, sehingga tidak ada frame yang menampilkan empty state.
+Notifier yang sama memperbarui access token untuk `ApiClient`. Server
+merotasi refresh token dan menganggap pemakaian kedua token lama sebagai
+replay (seluruh sesi dicabut), jadi semua request yang kena 401 bersamaan
+berbagi satu refresh. Refresh yang ditolak mengakhiri sesi; kegagalan
+jaringan tidak, supaya HP yang offline tidak ter-logout.
 
-**File: `lib/main.dart:52`**
+**File: `lib/providers/account/session_provider.dart:206`**
+
+```dart
+Future<bool> refreshTokens() {
+  return _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
+}
+
+Future<bool> _refresh() async {
+  final AuthSession? session = state;
+  if (session == null) {
+    return false;
+  }
+  try {
+    state = await _repo.refresh(session);
+    return true;
+  } on ApiException catch (error) {
+    if (error.isNetwork) {
+      return false;
+    }
+    await _repo.clear();
+    state = null;
+    return false;
+  }
+}
+```
+
+`ApiClient` memakai refresh itu tepat sekali per request: 401 pertama memicu
+refresh lalu request diulang, dan 401 kedua diteruskan ke pemanggil sebagai
+`ApiException`.
+
+Agar layar pertama sudah tahu status login, konfigurasi `.env` dimuat dan
+sesi dipulihkan dari keystore sebelum `runApp`, lalu sesi disuntikkan lewat
+`overrideWith`. Sinkronisasi ke backend berjalan setelah frame pertama dan
+tidak ditunggu, jadi aplikasi langsung tampil dengan cache terakhir.
+
+**File: `lib/main.dart:59`**
 
 ```dart
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiConfig.load();
   final SecureStore secureStore = SecureStore();
-  final AuthSession? session =
-      await SessionRepository(secure: secureStore).restore();
-
+  final AuthSession? session = await SessionRepository.restoreFrom(
+    secureStore,
+  );
   final ProviderContainer container = ProviderContainer(
     overrides: [
       preferencesStoreProvider.overrideWithValue(
@@ -357,13 +409,10 @@ Future<void> main() async {
       ),
     ],
   );
-
-  final AppSeeder seeder = container.read(appSeederProvider);
-  await seeder.seedIfEmpty();
-
   runApp(
     UncontrolledProviderScope(container: container, child: const MyApp()),
   );
+  unawaited(container.read(appSyncProvider).syncAll());
 }
 ```
 
@@ -375,7 +424,7 @@ formnya — ia hanya memilih langkah yang relevan dari daftar yang sama, karena
 email dari akun Google sudah terverifikasi dan password tidak dibutuhkan.
 Langkah yang tersisa adalah nama, username, NIM, kampus, dan jurusan.
 
-**File: `lib/screens/auth/register/register_email_screen.dart:80`**
+**File: `lib/screens/auth/register/register_email_screen.dart:92`**
 
 ```dart
 /// @dev Google variant: name, username, NIM, university, and major only.
@@ -388,11 +437,13 @@ static final List<FormStep> googleSteps = [
 ];
 ```
 
-Tombol "Continue with Google" di halaman Register menyimpan sesi dulu, baru
-membuka form ringkas lewat route `/register-google`. Flag `_busy` mencegah
-double tap saat proses berjalan.
+Tombol "Continue with Google" di halaman Register masuk dulu lewat server.
+Akun baru (`onboardingRequired`) dibawa ke form ringkas di route
+`/register-google`; akun yang sudah lengkap langsung ke beranda. Pembatalan
+di pemilih akun (`GOOGLE_CANCELED`) diam saja, sedangkan error lain tampil
+sebagai snackbar. Flag `_busy` mencegah double tap.
 
-**File: `lib/screens/auth/register/register_screen.dart:72`**
+**File: `lib/screens/auth/register/register_screen.dart:78`**
 
 ```dart
 Future<void> _continueWithGoogle() async {
@@ -400,72 +451,92 @@ Future<void> _continueWithGoogle() async {
     return;
   }
   setState(() => _busy = true);
-  await ref.read(sessionProvider.notifier).signInWithGoogle();
+  final AuthSession session;
+  try {
+    session = await ref.read(sessionProvider.notifier).signInWithGoogle();
+    await ref.read(appSyncProvider).syncAccount();
+  } on ApiException catch (error) {
+    // GOOGLE_CANCELED diam; error lain -> snackbar error.userMessage
+    return;
+  }
   if (!mounted) {
     return;
   }
-  Navigator.of(context).pushReplacementNamed(
-    RegisterEmailScreen.googleRouteName,
+  if (session.onboardingRequired) {
+    Navigator.of(context).pushReplacementNamed(
+      RegisterEmailScreen.googleRouteName,
+    );
+    return;
+  }
+  Navigator.of(context).pushNamedAndRemoveUntil(
+    KosplyMainLayout.routeName,
+    (Route<dynamic> route) => false,
   );
 }
 ```
 
-Nama dari akun Google langsung ter-prefill lewat parameter `initialValues`
-baru di `SteppedForm`, dan `onCompleted` sekarang menerima semua nilai sekaligus
-dalam bentuk `List<String>` sehingga penyimpanan bisa dilakukan sekali jalan
-di akhir.
+`SteppedForm` memanggil hook `onStepSubmit` di setiap langkah, sehingga
+server bisa menolak sebuah langkah dan form kembali ke langkah yang salah.
+Alur email meminta kode verifikasi setelah langkah password, mengeceknya di
+langkah kode, lalu membuat akun di langkah terakhir. Alur Google hanya
+mengirim data kampus lewat `PATCH /api/users/me` di langkah terakhir. Penolakan
+`EMAIL_TAKEN`, `USERNAME_TAKEN`, dan `EMAIL_CODE_INVALID` mengembalikan
+pengguna ke langkah yang bersangkutan.
 
-**File: `lib/screens/auth/register/register_email_screen.dart:133`**
-
-```dart
-return SteppedForm(
-  steps: googleFlow ? googleSteps : steps,
-  initialValues: prefillName
-      ? <int, String>{0: session.displayName}
-      : const <int, String>{},
-  onCompleted: (List<String> values) =>
-      unawaited(_finish(context, ref, values)),
-);
-```
-
-Saat langkah terakhir lolos validasi, `_finish` menulis profil ke cache Drift
-lewat `completeRegistration` lalu melanjutkan ke `InterestScreen`. NIM,
-kampus, dan jurusan tetap divalidasi di form, tetapi belum masuk cache karena
-tabel `users` baru mendapat kolomnya saat integrasi fetch backend.
-
-**File: `lib/screens/auth/register/register_email_screen.dart:96`**
+**File: `lib/screens/auth/register/register_email_screen.dart:112`**
 
 ```dart
-Future<void> _finish(
-  BuildContext context,
+Future<StepFeedback?> _submit(
   WidgetRef ref,
+  int step,
   List<String> values,
 ) async {
+  final int last = (googleFlow ? googleSteps : steps).length - 1;
   final SessionNotifier session = ref.read(sessionProvider.notifier);
-  if (googleFlow) {
-    await session.completeRegistration(
-      name: values[0].trim(),
-      username: values[1].trim(),
-    );
-  } else {
-    await session.signInWithEmail(email: values[0].trim());
-    await session.completeRegistration(
-      name: values[1].trim(),
-      username: values[2].trim(),
-    );
+  final int usernameStep = googleFlow ? 1 : 2;
+  final String email = values[emailStep].trim();
+  try {
+    if (!googleFlow && step == passwordStep) {
+      await session.requestEmailCode(email);
+    } else if (!googleFlow && step == codeStep) {
+      await session.verifyEmailCode(email: email, code: values[codeStep]);
+    } else if (step == last) {
+      if (googleFlow) {
+        await session.completeRegistration(
+          name: values[0].trim(),
+          username: values[1].trim(),
+          universitas: values[3].trim(),
+          programStudi: values[4].trim(),
+        );
+      } else {
+        await session.register(/* email, nama, username, password, kampus, jurusan, kode */);
+      }
+      await ref.read(appSyncProvider).syncAccount();
+    }
+  } on ApiException catch (error) {
+    switch (error.code) {
+      case 'EMAIL_TAKEN':
+        return StepFeedback(error.userMessage, step: emailStep);
+      case 'USERNAME_TAKEN':
+        return StepFeedback(error.userMessage, step: usernameStep);
+      case 'EMAIL_CODE_INVALID':
+        return StepFeedback(error.userMessage, step: codeStep);
+      default:
+        return StepFeedback(error.userMessage);
+    }
   }
-  if (!context.mounted) {
-    return;
-  }
-  Navigator.of(context).pushReplacementNamed(InterestScreen.routeName);
+  return null;
 }
 ```
+
+NIM tetap divalidasi di form tetapi tidak dikirim saat registrasi: NIM dan
+foto KTM masuk lewat pengajuan verifikasi penjual (`/api/verifications`).
 
 Splash menjadi tempat keputusan routing: tanpa sesi diarahkan ke Register,
 sesi yang masih butuh onboarding diarahkan ke form Google, dan sisanya ke
 home shell.
 
-**File: `lib/screens/auth/onboarding/splash_screen.dart:58`**
+**File: `lib/screens/auth/onboarding/splash_screen.dart:59`**
 
 ```dart
 final AuthSession? session = ref.read(sessionProvider);
@@ -478,10 +549,10 @@ final String target = switch (session) {
 Navigator.of(context).pushReplacementNamed(target);
 ```
 
-Logout memanggil `signOut()` yang menghapus token dari keystore, lalu kembali
-ke splash supaya routing sadar-sesi di atas menentukan tujuan berikutnya.
+Logout memanggil `signOut()`, lalu kembali ke splash supaya routing
+sadar-sesi di atas menentukan tujuan berikutnya.
 
-**File: `lib/screens/settings/app/app_setting_screen.dart:172`**
+**File: `lib/screens/settings/app/app_setting_screen.dart:213`**
 
 ```dart
 onTap: () async {
@@ -496,44 +567,70 @@ onTap: () async {
 },
 ```
 
+`signOut()` mencabut refresh token di server (best effort, supaya logout
+tetap jalan saat offline), menghapus seluruh key `auth.*` dari keystore, lalu
+membersihkan data akun dari cache. Katalog publik dibiarkan, jadi pengguna
+berikutnya di HP yang sama tidak melihat chat, tiket, favorit, atau riwayat AI
+milik akun sebelumnya.
+
+**File: `lib/providers/account/session_provider.dart:232`**
+
+```dart
+Future<void> signOut() async {
+  final AuthSession? session = state;
+  await _repo.signOut(session);
+  state = null;
+  await ref.read(appDatabaseProvider).clearAccountData();
+}
+```
+
 ## 5. Testing
 
-Widget test memakai helper `pumpKosplyApp` yang menyemai database in-memory
-dan membungkus layar dengan scope Riverpod yang sama seperti aplikasi asli,
-sehingga layar membaca data Drift yang identik dengan kondisi pertama kali
-aplikasi dibuka di device. Container bisa dikirim ulang lewat parameter
-`container`, misalnya untuk lanjut dari kondisi setelah login.
+Widget test tidak menyentuh jaringan. `FakeKosplyBackend`
+(`test/helpers/fake_backend.dart`) adalah pengganti server di memori yang
+dilayani lewat `MockClient` milik `package:http`. Ia menjawab dengan envelope
+dan bentuk respons yang sama seperti server, diisi dari fixture di
+`test/helpers/fixtures/`. Karena yang diganti hanya transport HTTP, setiap
+repository menjalankan kode HTTP, pemetaan, dan cache yang sebenarnya.
+
+Helper `seededContainer` membuat scope Riverpod yang diarahkan ke backend
+palsu itu, login sebagai mahasiswa fixture, lalu menjalankan sinkronisasi
+yang sama dengan aplikasi asli. `pumpKosplyApp` membungkus layar dengan scope
+tersebut. Parameter `signedIn: false` dipakai untuk layar sebelum login, dan
+`backend` untuk tes yang perlu memeriksa request atau mengatur respons.
 
 **File: `test/helpers/kosply_test_app.dart:35`**
 
 ```dart
-Future<ProviderContainer> pumpKosplyApp(
-  WidgetTester tester,
-  Widget home, {
-  Map<String, WidgetBuilder>? routes,
-  RouteFactory? onGenerateRoute,
-  Widget Function(Widget home)? app,
-  ProviderContainer? container, // reuse container, mis. setelah login
+Future<ProviderContainer> seededContainer({
+  List<Override> overrides = const <Override>[],
+  bool signedIn = true,
+  FakeKosplyBackend? backend,
 }) async {
-  final ProviderContainer scope = container ?? await seededContainer();
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: scope,
-      child: app?.call(home) ??
-          MaterialApp(
-            home: home,
-            routes: routes ?? const <String, WidgetBuilder>{},
-            onGenerateRoute: onGenerateRoute,
-          ),
-    ),
+  final FakeKosplyBackend api = backend ?? FakeKosplyBackend();
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      httpClientProvider.overrideWithValue(api.client),
+      apiBaseUrlProvider.overrideWithValue(FakeKosplyBackend.origin),
+      googleIdTokenSourceProvider.overrideWithValue(_FixedGoogleIdToken()),
+      ...overrides,
+    ],
   );
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 20));
-  await tester.pump(const Duration(milliseconds: 20));
-  await tester.pump();
-  return scope;
+  addTearDown(container.dispose);
+  if (signedIn) {
+    await container
+        .read(sessionProvider.notifier)
+        .signInWithEmail(email: 'me@kampus.ac.id', password: 'password');
+  }
+  await container.read(appSyncProvider).syncAll();
+  return container;
 }
 ```
+
+`test/real_api_smoke_test.dart` menjalankan repository yang sama terhadap
+server sungguhan. Tes itu dilewati kecuali dijalankan dengan
+`--dart-define=KOSPLY_REAL_API=http://127.0.0.1:3500`, sehingga
+`flutter test` biasa tetap offline.
 
 Ada dua jebakan yang sudah ditemukan saat menulis tes dan perlu diingat lagi.
 Pertama, di plain test tanpa widget jangan menunggu `.future` dari
@@ -543,15 +640,17 @@ Pakai method one-shot dari repository/DAO seperti `threadsOnce()` atau
 frame baru, jadi `pumpAndSettle` bisa berhenti sebelum rantai penyimpanan
 selesai; tes auth memakai helper `_settle` dengan beberapa pump berdurasi
 untuk menunggu. Verifikasi dilakukan dengan `flutter analyze` dan
-`flutter test`; status terakhir keduanya bersih dengan 92 tes hijau.
+`flutter test`; status terakhir keduanya bersih dengan 114 tes hijau dan 1
+dilewati (smoke test API sungguhan).
 
 ## 6. Batasan yang Disengaja
 
-Google sign-in masih berupa demo gateway dengan akun kampus tetap dan belum
-memakai `google_sign_in` beserta client ID asli, tetapi bentuk sesi, token,
-dan routing sudah final sehingga penggantian nanti hanya menyentuh
-`SessionRepository`. NIM, kampus, dan jurusan juga divalidasi di form tapi
-belum di-cache karena menunggu kolom baru di tabel `users` saat fetch backend
-masuk. Password tidak pernah dipersist — hanya pasangan token yang disimpan
-di keystore. Terakhir, target web tidak didukung karena Drift `NativeDatabase`
-membutuhkan `dart:ffi`; aplikasi dijalankan di Android, iOS, atau desktop.
+Google sign-in butuh client id OAuth sendiri: tanpa `GOOGLE_SERVER_CLIENT_ID`
+tombolnya hanya menjelaskan bahwa login Google belum dikonfigurasi, dan login
+email tetap berjalan. Akun baru berstatus pembeli; memasang barang ditolak
+server (`SELLER_NOT_APPROVED`) sampai pengajuan verifikasinya disetujui
+admin. Password tidak pernah dipersist — hanya pasangan token yang disimpan
+di keystore. Koneksi `http://` hanya diizinkan di build debug, jadi build
+release harus menunjuk ke server `https://`. Terakhir, target web tidak
+didukung karena Drift `NativeDatabase` membutuhkan `dart:ffi`; aplikasi
+dijalankan di Android, iOS, atau desktop.
