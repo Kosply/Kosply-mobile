@@ -1,6 +1,8 @@
 /// @title KTM camera
-/// @notice Captures one student-card photo and returns its file path.
+/// @notice Captures one photo and returns its file path.
 /// @dev Uses the same {ListingCamera} as listing photos, so tests can swap it.
+/// Built for the student card; the profile editor reuses it with its own
+/// [KtmCameraScreen.title].
 /// @author Kosply-mobile
 library;
 
@@ -13,18 +15,26 @@ import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @title KtmCameraScreen
-/// @notice One-shot camera for the verification form.
+/// @notice One-shot camera for the verification form and the profile photo.
 class KtmCameraScreen extends ConsumerStatefulWidget {
   /// @notice Creates the camera.
+  /// @param title App bar title naming what is being photographed.
   /// @return A new {KtmCameraScreen} instance.
-  const KtmCameraScreen({super.key});
+  const KtmCameraScreen({this.title = ktmTitle, super.key});
+
+  /// @dev Default title, for the student card.
+  static const String ktmTitle = 'Foto KTM';
+
+  /// @dev App bar title naming what is being photographed.
+  final String title;
 
   /// @notice Pushes the camera and returns the captured path.
   /// @param context The build context.
+  /// @param title App bar title naming what is being photographed.
   /// @return The file path, or null when the student backs out.
-  static Future<String?> push(BuildContext context) {
+  static Future<String?> push(BuildContext context, {String title = ktmTitle}) {
     return Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(builder: (_) => const KtmCameraScreen()),
+      MaterialPageRoute<String>(builder: (_) => KtmCameraScreen(title: title)),
     );
   }
 
@@ -87,7 +97,7 @@ class _KtmCameraScreenState extends ConsumerState<KtmCameraScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Foto KTM'),
+        title: Text(widget.title),
       ),
       body: Center(child: _ready ? _camera.buildPreview() : const SizedBox()),
       floatingActionButton: FloatingActionButton(

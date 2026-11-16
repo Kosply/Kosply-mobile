@@ -1,5 +1,7 @@
 /// @title ProfileSettingScreen
 /// @notice Edit photo, name, username, and seller bio.
+/// @dev The photo is a fresh camera shot uploaded to `/api/uploads/images`;
+/// `PATCH /api/users/me` only accepts an `http(s)` photo URL.
 /// @author Kosply-mobile
 library;
 
@@ -8,13 +10,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../models/account/account_mode.dart';
-import '../../../models/catalog/seller.dart';
 import '../../../models/account/user_profile.dart';
 import '../../../providers/account/account_mode_provider.dart';
 import '../../../providers/account/profile_provider.dart';
+import '../../../providers/catalog/listing_draft_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/seller/identity/seller_avatar.dart';
+import '../verification/ktm_camera_screen.dart';
 
 /// @title ProfileSettingScreen
 /// @notice Profile editor opened from Settings or the top-bar avatar.
@@ -52,6 +55,7 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
   late final TextEditingController _username;
   late final TextEditingController _bio;
   late String _avatarPath;
+  bool _uploading = false;
 
   /// @notice Seeds the fields from the saved profile.
   /// @return void
@@ -75,8 +79,40 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
     super.dispose();
   }
 
-  void _addPhoto() {
-    setState(() => _avatarPath = Seller.avatar);
+  /// @notice Takes a new profile photo and uploads it.
+  /// @dev The avatar only changes once the server returned the photo URL, so
+  /// a failed upload leaves the saved photo in place.
+  /// @return Future completing when the avatar shows the upload or the error.
+  Future<void> _addPhoto() async {
+    if (_uploading) {
+      return;
+    }
+    final String? path = await KtmCameraScreen.push(
+      context,
+      title: 'Foto profil',
+    );
+    if (path == null || !mounted) {
+      return;
+    }
+    setState(() => _uploading = true);
+    try {
+      final String url = await ref
+          .read(uploadRepositoryProvider)
+          .uploadImage(path);
+      if (mounted) {
+        setState(() => _avatarPath = url);
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploading = false);
+      }
+    }
   }
 
   /// @notice Saves through `PATCH /api/users/me` and closes on success.
@@ -172,12 +208,22 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
                       color: KosplyColors.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Center(
-                      child: PhosphorGlyph(
-                        PhosphorCode.plus,
-                        size: 14,
-                        color: Colors.white,
-                      ),
+                    child: Center(
+                      child: _uploading
+                          ? const SizedBox(
+                              key: Key('profile-photo-uploading'),
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const PhosphorGlyph(
+                              PhosphorCode.plus,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                     ),
                   ),
                 ],
@@ -221,7 +267,7 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 key: const Key('profile-save'),
-                onPressed: _save,
+                onPressed: _uploading ? null : _save,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: KosplyColors.primary,
