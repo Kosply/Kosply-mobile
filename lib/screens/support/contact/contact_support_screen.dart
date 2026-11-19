@@ -10,6 +10,7 @@ import '../../../models/catalog/seller.dart';
 import '../../../models/support/support_ticket.dart';
 import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/common/search/searchbar.dart';
@@ -76,6 +77,7 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.watch(ticketsSyncProvider);
     final List<SupportTicket> all =
         ref.watch(supportTicketsProvider).value ?? const <SupportTicket>[];
     final List<SupportTicket> items = _visible(all);
@@ -136,16 +138,9 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
           ),
           const SizedBox(height: 16),
           if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                'Tidak ada ticket.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: KosplyColors.textSecondaryOf(context),
-                ),
-              ),
+            const EmptyStateCard(
+              icon: PhosphorCode.headset,
+              message: 'Tidak ada ticket.',
             )
           else
             for (final SupportTicket item in items)

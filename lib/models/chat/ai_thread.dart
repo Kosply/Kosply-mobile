@@ -1,8 +1,9 @@
 /// @title AI thread
-/// @notice Placeholder Home AI conversation used until a real assistant API
-/// is wired up.
+/// @notice Home AI conversation backed by `/api/ai/*`.
 /// @author Kosply-mobile
 library;
+
+import 'listing_proposal.dart';
 
 /// @title AiMessage
 /// @notice One bubble in an AI thread.
@@ -11,8 +12,18 @@ class AiMessage {
   /// @param id Stable identifier of the bubble.
   /// @param text Message body.
   /// @param isMine True when the signed-in student sent it.
+  /// @param pending True while the AI answer is still on its way.
   /// @return A new {AiMessage} instance.
-  const AiMessage({required this.id, required this.text, required this.isMine});
+  const AiMessage({
+    required this.id,
+    required this.text,
+    required this.isMine,
+    this.pending = false,
+    this.thinking = '',
+    this.needsApproval = false,
+    this.draft = '',
+    this.proposal,
+  });
 
   /// @dev Stable identifier of the bubble.
   final String id;
@@ -22,6 +33,22 @@ class AiMessage {
 
   /// @dev True when the signed-in student sent it.
   final bool isMine;
+
+  /// @dev True while the AI answer is still on its way; never cached.
+  final bool pending;
+
+  /// @dev Reasoning text from the stream, shown above the answer.
+  final String thinking;
+
+  /// @dev True while a sensitive tool is waiting for approve or reject.
+  final bool needsApproval;
+
+  /// @dev The chat line that will be sent if the student approves. Empty
+  /// once the decision is finished.
+  final String draft;
+
+  /// @dev Seller form the student can approve. Null for a chat message.
+  final ListingProposal? proposal;
 }
 
 /// @title AiThread

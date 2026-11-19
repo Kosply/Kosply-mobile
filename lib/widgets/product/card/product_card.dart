@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/colors/kosply_colors.dart';
 import '../../common/icons/phosphor_icons.dart';
+import '../../common/images/kosply_image.dart';
 
 /// @title ProductCard
 /// @notice Tappable catalogue card shell.
@@ -19,6 +20,7 @@ class ProductCard extends StatelessWidget {
   /// @param location Short location label.
   /// @param imagePath Asset path of the item image.
   /// @param onTap Optional tap handler.
+  /// @param highlighted Whether the AI just pointed at this card.
   /// @return A new {ProductCard} instance.
   const ProductCard({
     super.key,
@@ -27,6 +29,7 @@ class ProductCard extends StatelessWidget {
     required this.location,
     required this.imagePath,
     this.onTap,
+    this.highlighted = false,
   });
 
   /// @dev Item name.
@@ -44,6 +47,9 @@ class ProductCard extends StatelessWidget {
   /// @dev Optional tap handler.
   final VoidCallback? onTap;
 
+  /// @dev Whether the AI just pointed at this card.
+  final bool highlighted;
+
   /// @notice Builds the card.
   /// @param context The build context.
   /// @return The card widget.
@@ -56,7 +62,12 @@ class ProductCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: KosplyColors.surfaceOf(context),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: KosplyColors.outlineOf(context)),
+          border: Border.all(
+            color: highlighted
+                ? KosplyColors.primary
+                : KosplyColors.outlineOf(context),
+            width: highlighted ? 2 : 1,
+          ),
         ),
         padding: const EdgeInsets.all(8),
         child: Column(
@@ -66,7 +77,7 @@ class ProductCard extends StatelessWidget {
               aspectRatio: 1,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Image.asset(imagePath, fit: BoxFit.cover),
+                child: KosplyImage(imagePath),
               ),
             ),
             const SizedBox(height: 8),

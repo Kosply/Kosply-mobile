@@ -36,39 +36,6 @@ class Seller {
   /// @dev Short campus bio.
   final String bio;
 
-  /// @notice Builds a placeholder seller.
-  /// @param index Zero-based seller slot, wrapped across [count].
-  /// @return A placeholder {Seller}.
-  factory Seller.placeholder(int index) {
-    final int slot = index % count;
-    return Seller(
-      id: 'seller-${slot + 1}',
-      name: 'seller${slot + 1}',
-      avatarPath: avatar,
-      activeLabel: 'aktif ${placeholderActiveMinutes(index)} menit lalu',
-      bio: loremIpsum,
-    );
-  }
-
-  /// @notice Minutes-ago behind the placeholder activity label.
-  /// @dev Shared by the placeholder model and the cache seed so both agree.
-  /// @param index Zero-based seller slot, wrapped across [count].
-  /// @return Minutes since the placeholder seller was last active.
-  static int placeholderActiveMinutes(int index) {
-    final int slot = index % count;
-    return (slot * 11) + 5;
-  }
-
-  /// @dev Number of placeholder sellers.
-  static const int count = 4;
-
-  /// @dev Shared profile photo.
+  /// @dev Photo shown when a profile has none of its own.
   static const String avatar = 'assets/images/profile_placeholder.png';
-
-  /// @dev Placeholder bio used on the seller screen.
-  static const String loremIpsum =
-      'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do '
-      'eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut '
-      'enim ad minim veniam, quis nostrud exercitation ullamco laboris '
-      'nisi ut aliquip ex ea commodo consequat.';
 }

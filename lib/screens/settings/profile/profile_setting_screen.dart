@@ -1,19 +1,24 @@
 /// @title ProfileSettingScreen
 /// @notice Edit photo, name, username, and seller bio.
+/// @dev The photo is a fresh camera shot uploaded to `/api/uploads/images`;
+/// `PATCH /api/users/me` only accepts an `http(s)` photo URL.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../models/account/account_mode.dart';
-import '../../../models/catalog/seller.dart';
 import '../../../models/account/user_profile.dart';
 import '../../../providers/account/account_mode_provider.dart';
 import '../../../providers/account/profile_provider.dart';
+import '../../../providers/catalog/listing_draft_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/seller/identity/seller_avatar.dart';
+import '../verification/ktm_camera_screen.dart';
 
 /// @title ProfileSettingScreen
 /// @notice Profile editor opened from Settings or the top-bar avatar.
@@ -51,6 +56,7 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
   late final TextEditingController _username;
   late final TextEditingController _bio;
   late String _avatarPath;
+  bool _uploading = false;
 
   /// @notice Seeds the fields from the saved profile.
   /// @return void
@@ -74,22 +80,66 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
     super.dispose();
   }
 
-  void _addPhoto() {
-    setState(() => _avatarPath = Seller.avatar);
+  /// @notice Takes a new profile photo and uploads it.
+  /// @dev The avatar only changes once the server returned the photo URL, so
+  /// a failed upload leaves the saved photo in place.
+  /// @return Future completing when the avatar shows the upload or the error.
+  Future<void> _addPhoto() async {
+    if (_uploading) {
+      return;
+    }
+    final String? path = await KtmCameraScreen.push(
+      context,
+      title: 'Foto profil',
+    );
+    if (path == null || !mounted) {
+      return;
+    }
+    setState(() => _uploading = true);
+    try {
+      final String url = await ref
+          .read(uploadRepositoryProvider)
+          .uploadImage(path);
+      if (mounted) {
+        setState(() => _avatarPath = url);
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploading = false);
+      }
+    }
   }
 
-  void _save() {
-    ref
-        .read(profileProvider.notifier)
-        .save(
-          UserProfile(
-            name: _name.text.trim(),
-            username: _username.text.trim(),
-            bio: _bio.text.trim(),
-            avatarPath: _avatarPath,
-          ),
-        );
-    Navigator.of(context).maybePop();
+  /// @notice Saves through `PATCH /api/users/me` and closes on success.
+  /// @dev A refusal (e.g. a taken username) keeps the form open and says why.
+  /// @return Future completing when the form closed or the error is shown.
+  Future<void> _save() async {
+    try {
+      await ref
+          .read(profileProvider.notifier)
+          .save(
+            UserProfile(
+              name: _name.text.trim(),
+              username: _username.text.trim(),
+              bio: _bio.text.trim(),
+              avatarPath: _avatarPath,
+            ),
+          );
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+      return;
+    }
+    if (mounted) {
+      await Navigator.of(context).maybePop();
+    }
   }
 
   /// @notice Builds the profile form.
@@ -101,123 +151,142 @@ class _ProfileSettingScreenState extends ConsumerState<ProfileSettingScreen> {
     final Color onShell = KosplyColors.textPrimaryOf(context);
     final bool hasPhoto = _avatarPath.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: AppBar(
+    return RouteGapHost(
+      gap: kBottomBarGap,
+      child: Scaffold(
         backgroundColor: KosplyColors.backgroundOf(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: PhosphorGlyph(PhosphorCode.arrowLeft, size: 20, color: onShell),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(
-          'Profile setting',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: onShell,
+        appBar: AppBar(
+          backgroundColor: KosplyColors.backgroundOf(context),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: PhosphorGlyph(
+              PhosphorCode.arrowLeft,
+              size: 20,
+              color: onShell,
+            ),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          title: Text(
+            'Profile setting',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: onShell,
+            ),
           ),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          Center(
-            child: GestureDetector(
-              key: const Key('profile-photo'),
-              onTap: _addPhoto,
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  hasPhoto
-                      ? SellerAvatar(path: _avatarPath, size: 96)
-                      : Container(
-                          width: 96,
-                          height: 96,
-                          decoration: BoxDecoration(
-                            color: KosplyColors.primary.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: KosplyColors.outlineOf(context),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            Center(
+              child: GestureDetector(
+                key: const Key('profile-photo'),
+                onTap: _addPhoto,
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    hasPhoto
+                        ? SellerAvatar(path: _avatarPath, size: 96)
+                        : Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              color: KosplyColors.primary.withValues(
+                                alpha: 0.12,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: KosplyColors.outlineOf(context),
+                              ),
+                            ),
+                            child: const Center(
+                              child: PhosphorGlyph(
+                                PhosphorCode.user,
+                                size: 36,
+                                color: KosplyColors.primary,
+                              ),
                             ),
                           ),
-                          child: const Center(
-                            child: PhosphorGlyph(
-                              PhosphorCode.user,
-                              size: 36,
-                              color: KosplyColors.primary,
-                            ),
-                          ),
-                        ),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: const BoxDecoration(
-                      color: KosplyColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: PhosphorGlyph(
-                        PhosphorCode.plus,
-                        size: 14,
-                        color: Colors.white,
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        color: KosplyColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: _uploading
+                            ? const SizedBox(
+                                key: Key('profile-photo-uploading'),
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const PhosphorGlyph(
+                                PhosphorCode.plus,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-          _LabeledField(
-            label: 'Nama',
-            hint: 'Nama lengkap',
-            controller: _name,
-            fieldKey: const Key('profile-name'),
-          ),
-          const SizedBox(height: 16),
-          _LabeledField(
-            label: 'Username',
-            hint: 'seller1',
-            controller: _username,
-            fieldKey: const Key('profile-username'),
-          ),
-          if (isSeller) ...[
+            const SizedBox(height: 24),
+            _LabeledField(
+              label: 'Nama',
+              hint: 'Nama lengkap',
+              controller: _name,
+              fieldKey: const Key('profile-name'),
+            ),
             const SizedBox(height: 16),
             _LabeledField(
-              label: 'Bio',
-              hint: 'Ceritakan barang yang kamu jual di kampus.',
-              controller: _bio,
-              fieldKey: const Key('profile-bio'),
-              maxLines: 4,
+              label: 'Username',
+              hint: 'seller1',
+              controller: _username,
+              fieldKey: const Key('profile-username'),
             ),
+            if (isSeller) ...[
+              const SizedBox(height: 16),
+              _LabeledField(
+                label: 'Bio',
+                hint: 'Ceritakan barang yang kamu jual di kampus.',
+                controller: _bio,
+                fieldKey: const Key('profile-bio'),
+                maxLines: 4,
+              ),
+            ],
           ],
-        ],
-      ),
-      bottomNavigationBar: Material(
-        color: KosplyColors.surfaceOf(context),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: ElevatedButton(
-                key: const Key('profile-save'),
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: KosplyColors.primary,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        ),
+        bottomNavigationBar: Material(
+          color: KosplyColors.surfaceOf(context),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: ElevatedButton(
+                  key: const Key('profile-save'),
+                  onPressed: _uploading ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: KosplyColors.primary,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Simpan',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  child: const Text(
+                    'Simpan',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ),

@@ -78,11 +78,7 @@ class SellerAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
                 if (showActive) ...[
                   const SizedBox(height: 2),
-                  ActiveStatusLine(
-                    label: seller.activeLabel,
-                    iconSize: 12,
-                    fontSize: 11,
-                  ),
+                  ActiveStatusLine(label: seller.activeLabel, fontSize: 11),
                 ],
               ],
             ),

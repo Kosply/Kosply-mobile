@@ -26,6 +26,7 @@ class AuthTextField extends StatelessWidget {
   /// the border red.
   /// @param obscure Whether the text is obscured.
   /// @param keyboardType Optional keyboard type.
+  /// @param autofocus Whether the field takes focus when it first appears.
   /// @param onChanged Optional change callback.
   /// @param suffix Optional trailing widget inside the input.
   /// @return A new {AuthTextField} instance.
@@ -37,6 +38,7 @@ class AuthTextField extends StatelessWidget {
     this.error,
     this.obscure = false,
     this.keyboardType,
+    this.autofocus = false,
     this.onChanged,
     this.suffix,
     super.key,
@@ -62,6 +64,9 @@ class AuthTextField extends StatelessWidget {
 
   /// @dev Optional keyboard type.
   final TextInputType? keyboardType;
+
+  /// @dev Whether the field takes focus when it first appears.
+  final bool autofocus;
 
   /// @dev Optional change callback.
   final ValueChanged<String>? onChanged;
@@ -99,7 +104,13 @@ class AuthTextField extends StatelessWidget {
             controller: controller,
             obscureText: obscure,
             keyboardType: keyboardType,
+            autofocus: autofocus,
             onChanged: onChanged,
+            cursorColor: KosplyColors.primary,
+            style: TextStyle(
+              fontSize: 16,
+              color: KosplyColors.textPrimaryOf(context),
+            ),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: const TextStyle(color: KosplyColors.textSecondary),

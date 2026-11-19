@@ -9,9 +9,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../layouts/main_layout.dart';
 import '../../../models/form/form_step.dart';
 import '../../../providers/account/session_provider.dart';
+import '../../../providers/sync/app_sync_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/auth/scaffold/auth_scaffold.dart';
 import '../../../widgets/auth/fields/auth_text_field.dart';
@@ -59,6 +61,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// @dev Validation error of the password field.
   String? _passwordError;
 
+  /// @dev True while `POST /api/auth/login` is in flight.
+  bool _busy = false;
+
   /// @notice Releases both controllers.
   /// @return void
   @override
@@ -68,11 +73,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// @notice Validates both fields, stores the session, and opens home.
-  /// @dev The password is only checked locally for now; the backend verifies
-  /// it once `/auth` is wired, and it is never persisted on device.
+  /// @notice Validates both fields, signs in, and opens home.
+  /// @dev `POST /api/auth/login` checks the password; it is never persisted
+  /// on device. A refusal is shown under the password field.
   /// @return Future completing when navigation starts.
   Future<void> _signIn() async {
+    if (_busy) {
+      return;
+    }
     final String? emailError = FormValidators.email()(_email.text);
     final String? passwordError = FormValidators.password()(_password.text);
     if (emailError != null || passwordError != null) {
@@ -82,13 +90,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       return;
     }
-    await ref
-        .read(sessionProvider.notifier)
-        .signInWithEmail(email: _email.text.trim());
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(sessionProvider.notifier)
+          .signInWithEmail(email: _email.text.trim(), password: _password.text);
+      await ref.read(appSyncProvider).syncAccount();
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _passwordError = error.userMessage;
+        });
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushReplacementNamed(KosplyMainLayout.routeName);
+    // @dev Drops the auth screens so Back from home never returns to them.
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      KosplyMainLayout.routeName,
+      (Route<dynamic> route) => false,
+    );
   }
 
   /// @notice Builds the login form.
@@ -161,10 +185,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ],
       ),
       bottomBar: FormActions(
-        onBack: () => Navigator.of(context).pop(),
+        onBack: () => Navigator.of(context).maybePop(),
         onContinue: _signIn,
         backLabel: 'Go back',
-        continueLabel: 'Sign in',
+        continueLabel: _busy ? 'Signing in…' : 'Sign in',
       ),
     );
   }

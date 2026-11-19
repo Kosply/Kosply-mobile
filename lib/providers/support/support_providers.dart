@@ -10,10 +10,17 @@ import '../../data/support/support_repository.dart';
 import '../../models/chat/conversation.dart';
 import '../../models/support/help_topic.dart';
 import '../../models/support/support_ticket.dart';
+import '../account/session_provider.dart';
+import '../catalog/catalog_providers.dart';
+import '../network/api_provider.dart';
 
 /// @dev Support repository backed by the Drift cache.
 final supportRepositoryProvider = Provider<SupportRepository>(
-  (ref) => SupportRepository(dao: ref.watch(appDatabaseProvider).supportDao),
+  (ref) => SupportRepository(
+    dao: ref.watch(appDatabaseProvider).supportDao,
+    api: ref.watch(apiClientProvider),
+    currentUserId: ref.watch(currentUserIdProvider),
+  ),
 );
 
 /// @dev The cached FAQ in display order.
@@ -30,4 +37,22 @@ final supportTicketsProvider = StreamProvider<List<SupportTicket>>(
 final ticketMessagesProvider = StreamProvider.family<List<ChatMessage>, String>(
   (ref, String ticketId) =>
       ref.watch(supportRepositoryProvider).watchTicketMessages(ticketId),
+);
+
+/// @dev Re-reads the public FAQ when the Help desk or ticket form opens.
+final helpTopicsSyncProvider = FutureProvider.autoDispose<void>(
+  (ref) =>
+      refreshQuietly(ref.read(supportRepositoryProvider).refreshHelpTopics),
+);
+
+/// @dev Re-reads the student's tickets when the contact screen opens.
+final ticketsSyncProvider = FutureProvider.autoDispose<void>(
+  (ref) => refreshQuietly(ref.read(supportRepositoryProvider).refreshTickets),
+);
+
+/// @dev Pulls one ticket's thread when it is opened.
+final ticketSyncProvider = FutureProvider.autoDispose.family<void, String>(
+  (ref, String ticketId) => refreshQuietly(
+    () => ref.read(supportRepositoryProvider).refreshTicket(ticketId),
+  ),
 );

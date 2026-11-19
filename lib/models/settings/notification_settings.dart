@@ -31,6 +31,9 @@ class NotificationSettings {
     this.newMessage = true,
     this.promo = true,
     this.transaction = true,
+    this.verification = true,
+    this.reports = true,
+    this.support = true,
   });
 
   /// @dev Master mode.
@@ -51,6 +54,15 @@ class NotificationSettings {
   /// @dev Order and payment updates.
   final bool transaction;
 
+  /// @dev Seller-verification results. Server key `verification`.
+  final bool verification;
+
+  /// @dev Report outcomes. Server key `reports`.
+  final bool reports;
+
+  /// @dev Support replies. Server key `support`.
+  final bool support;
+
   /// @notice Whether the personalisasi switches should be visible.
   bool get isPersonalized => mode == NotificationMode.personalized;
 
@@ -63,6 +75,9 @@ class NotificationSettings {
     bool? newMessage,
     bool? promo,
     bool? transaction,
+    bool? verification,
+    bool? reports,
+    bool? support,
   }) {
     return NotificationSettings(
       mode: mode ?? this.mode,
@@ -71,6 +86,9 @@ class NotificationSettings {
       newMessage: newMessage ?? this.newMessage,
       promo: promo ?? this.promo,
       transaction: transaction ?? this.transaction,
+      verification: verification ?? this.verification,
+      reports: reports ?? this.reports,
+      support: support ?? this.support,
     );
   }
 }

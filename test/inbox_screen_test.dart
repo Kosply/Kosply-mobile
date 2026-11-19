@@ -26,7 +26,7 @@ void main() {
         if (settings.name == ChatDetailScreen.routeName) {
           return MaterialPageRoute<void>(
             builder: (_) =>
-                ChatDetailScreen(sellerId: settings.arguments! as String),
+                ChatDetailScreen(conversationId: settings.arguments! as String),
           );
         }
         return null;
@@ -91,16 +91,18 @@ void main() {
     await pumpInbox(tester);
 
     await tester.tap(find.byKey(const Key('conversation-seller-1')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(ChatDetailScreen), findsOneWidget);
     expect(find.text('seller1'), findsWidgets);
-    expect(find.text('aktif 5 menit lalu'), findsOneWidget);
-    expect(find.byKey(const Key('chat-more')), findsOneWidget);
+    expect(find.text('aktif 5 menit lalu'), findsNothing);
+    expect(find.text('Aktif'), findsOneWidget);
+    expect(find.byKey(const Key('chat-more')), findsNothing);
     expect(find.text('Hai seller1, barangnya masih ada?'), findsOneWidget);
     expect(find.text('Tulis pesan...'), findsOneWidget);
     expect(find.byKey(const Key('chat-plus')), findsOneWidget);
-    expect(find.byKey(const Key('chat-voice')), findsOneWidget);
+    expect(find.byKey(const Key('chat-voice')), findsNothing);
     expect(find.byKey(const Key('chat-input')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -112,15 +114,19 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await pumpKosplyApp(tester, const ChatDetailScreen(sellerId: 'seller-2'));
+    await pumpKosplyApp(
+      tester,
+      const ChatDetailScreen(conversationId: 'seller-2'),
+    );
 
     expect(find.text('seller2'), findsOneWidget);
-    expect(find.text('aktif 16 menit lalu'), findsOneWidget);
-    expect(find.byKey(const Key('chat-more')), findsOneWidget);
+    expect(find.text('aktif 16 menit lalu'), findsNothing);
+    expect(find.text('Aktif'), findsOneWidget);
+    expect(find.byKey(const Key('chat-more')), findsNothing);
     expect(find.text('Hai seller2, barangnya masih ada?'), findsOneWidget);
     expect(find.text('Bisa COD di Ganesha?'), findsOneWidget);
     expect(find.byKey(const Key('chat-plus')), findsOneWidget);
-    expect(find.byKey(const Key('chat-voice')), findsOneWidget);
+    expect(find.byKey(const Key('chat-voice')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

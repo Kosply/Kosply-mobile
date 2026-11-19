@@ -62,6 +62,11 @@ class ChatMessage {
     required this.text,
     required this.isMine,
     required this.timeLabel,
+    this.type = 'TEXT',
+    this.imageUrl = '',
+    this.latitude = 0,
+    this.longitude = 0,
+    this.locationLabel = '',
   });
 
   /// @dev Stable identifier of the bubble.
@@ -75,4 +80,25 @@ class ChatMessage {
 
   /// @dev Clock shown with the bubble.
   final String timeLabel;
+
+  /// @dev TEXT, IMAGE, or LOCATION.
+  final String type;
+
+  /// @dev Uploaded photo URL for an IMAGE bubble.
+  final String imageUrl;
+
+  /// @dev Latitude for a LOCATION bubble.
+  final double latitude;
+
+  /// @dev Longitude for a LOCATION bubble.
+  final double longitude;
+
+  /// @dev Place name for a LOCATION bubble.
+  final String locationLabel;
+
+  /// @notice True when this bubble is a photo.
+  bool get isImage => type.toUpperCase() == 'IMAGE' && imageUrl.isNotEmpty;
+
+  /// @notice True when this bubble is a map pin.
+  bool get isLocation => type.toUpperCase() == 'LOCATION';
 }

@@ -10,6 +10,7 @@ import '../../../models/catalog/seller.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import 'active_status_line.dart';
 import '../../common/icons/phosphor_icons.dart';
+import '../../common/images/kosply_image.dart';
 
 /// @title SellerIdentity
 /// @notice Compact seller row copied across product and seller detail.
@@ -43,8 +44,10 @@ class SellerIdentity extends StatelessWidget {
     final Widget row = Row(
       children: [
         ClipOval(
-          child: Image.asset(
-            seller.avatarPath,
+          child: Image(
+            image: KosplyImage.providerFor(
+              seller.avatarPath.isEmpty ? Seller.avatar : seller.avatarPath,
+            ),
             width: avatarSize,
             height: avatarSize,
             fit: BoxFit.cover,
