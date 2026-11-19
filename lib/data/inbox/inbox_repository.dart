@@ -58,7 +58,8 @@ class InboxRepository {
     );
     await dao.upsertRooms(
       members: <UsersCompanion>[
-        for (final Map<String, dynamic> room in rooms) ..._memberRows(room, now),
+        for (final Map<String, dynamic> room in rooms)
+          ..._memberRows(room, now),
       ],
       bubbles: <MessagesCompanion>[
         for (final Map<String, dynamic> room in rooms)
@@ -170,7 +171,8 @@ class InboxRepository {
       for (final Map<String, dynamic> item in json.objects('messages'))
         _messageRow(
           item.str('conversationId').isEmpty
-              ? (Map<String, dynamic>.of(item)..['conversationId'] = conversationId)
+              ? (Map<String, dynamic>.of(item)
+                  ..['conversationId'] = conversationId)
               : item,
           now,
         ),
@@ -187,10 +189,56 @@ class InboxRepository {
   /// @param conversationId Room id.
   /// @param text Message text.
   /// @return Future completing when the server stored it and the cache shows it.
-  Future<void> sendText(String conversationId, String text) async {
+  Future<void> sendText(String conversationId, String text) {
+    return _postMessage(conversationId, <String, Object?>{
+      'type': 'TEXT',
+      'text': text,
+    });
+  }
+
+  /// @notice Sends a photo bubble. The bytes are already on the upload host.
+  /// @param conversationId Room id.
+  /// @param imageUrl Public URL from `POST /api/uploads/images`.
+  /// @return Future completing when the cache shows the photo.
+  Future<void> sendImage(String conversationId, String imageUrl) {
+    return _postMessage(conversationId, <String, Object?>{
+      'type': 'IMAGE',
+      'imageUrl': imageUrl,
+    });
+  }
+
+  /// @notice Sends the student's current pin.
+  /// @param conversationId Room id.
+  /// @param latitude WGS84 latitude.
+  /// @param longitude WGS84 longitude.
+  /// @param label Short place name.
+  /// @return Future completing when the cache shows the pin.
+  Future<void> sendLocation(
+    String conversationId, {
+    required double latitude,
+    required double longitude,
+    String label = '',
+  }) {
+    final String place = label.trim();
+    return _postMessage(conversationId, <String, Object?>{
+      'type': 'LOCATION',
+      'latitude': latitude,
+      'longitude': longitude,
+      if (place.isNotEmpty) 'locationLabel': place,
+    });
+  }
+
+  /// @notice Posts one bubble and writes the server's row into the cache.
+  /// @param conversationId Room id.
+  /// @param body Message fields the chat service already accepts.
+  /// @return Future completing when the cache shows the bubble.
+  Future<void> _postMessage(
+    String conversationId,
+    Map<String, Object?> body,
+  ) async {
     final Map<String, dynamic> json = await api.post(
       '/api/conversations/$conversationId/messages',
-      body: <String, String>{'type': 'TEXT', 'text': text},
+      body: body,
     );
     final Map<String, dynamic> item =
         json.object('item') ?? const <String, dynamic>{};
@@ -311,6 +359,7 @@ class InboxRepository {
             photo: Value<String>(room.object(key)!.str('photo')),
             universitas: Value<String>(room.object(key)!.str('universitas')),
             role: Value<String>(room.object(key)!.str('role')),
+            backendUpdatedAt: _activityStamp(room.object(key)!),
             updatedAt: Value<int>(now),
             lastFetched: Value<int>(now),
           ),
@@ -344,8 +393,27 @@ class InboxRepository {
           text: row.body,
           isMine: row.senderId == currentUserId,
           timeLabel: timeLabelFor(row.createdAt),
+          type: row.type.isEmpty ? 'TEXT' : row.type,
+          imageUrl: row.imageUrl,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          locationLabel: row.locationLabel,
         ),
     ];
+  }
+
+  /// @notice Inbox line for the newest bubble.
+  /// @param row Cached message.
+  /// @return Photo, place name, or the text body.
+  String _preview(MessageRow row) {
+    switch (row.type.toUpperCase()) {
+      case 'IMAGE':
+        return 'Foto';
+      case 'LOCATION':
+        return row.locationLabel.isEmpty ? 'Lokasi' : row.locationLabel;
+      default:
+        return row.body;
+    }
   }
 
   Conversation _toConversation(
@@ -363,11 +431,21 @@ class InboxRepository {
     return Conversation(
       id: row.id,
       peer: peer,
-      preview: last?.body ?? '',
+      preview: last == null ? '' : _preview(last),
       timeLabel: timeLabelFor(row.lastMessageAt),
       unreadCount: row.unreadCount,
       category: row.sellerId == currentUserId ? 'Pembeli' : 'Penjual',
     );
+  }
+
+  /// @notice Activity time from a room member, when the payload has one.
+  /// @param user Backend user.
+  /// @return The stamp, or absent.
+  Value<int> _activityStamp(Map<String, dynamic> user) {
+    final int updated = user.millis('updatedAt');
+    final int seen = user.millis('lastSeenAt');
+    final int stamp = updated == 0 ? seen : updated;
+    return stamp == 0 ? const Value<int>.absent() : Value<int>(stamp);
   }
 
   Seller? _peerOf(ConversationWithPeers thread) {

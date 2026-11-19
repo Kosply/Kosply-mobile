@@ -1,10 +1,13 @@
 /// @title SplashScreen
 /// @notice Brand splash screen with automatic navigation.
-/// @dev Static centered layout (icon, 10px gap, wordmark) plus a 2-second
-/// timer that routes by session: home when signed in, the shortened Google
-/// form when onboarding is pending, and Register otherwise.
+/// @dev Static centered layout (icon, 10px gap, wordmark). Location and
+/// notification permission are asked here, then a 2-second timer routes by
+/// session: home when signed in, the shortened Google form when onboarding
+/// is pending, and Register otherwise.
 /// @author Kosply-mobile
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../layouts/main_layout.dart';
 import '../../../models/auth/auth_session.dart';
 import '../../../providers/account/session_provider.dart';
+import '../../../providers/startup/startup_permissions.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/brand/kosply_wordmark.dart';
 import '../register/register_email_screen.dart';
@@ -44,26 +48,38 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 /// @title _SplashScreenState
 /// @notice Mutable state for {SplashScreen}.
-/// @dev Starts a 2-second timer, then replaces itself with the session
-/// destination.
+/// @dev Asks for location and notifications, waits out the brand delay, then
+/// replaces itself with the session destination. Navigation waits for the
+/// dialogs so Home does not ask for location a second time.
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  /// @notice Starts the splash delay timer.
+  /// @notice Starts the permission pass and the splash delay.
   /// @dev Guards navigation with {mounted}.
   /// @return void
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      final AuthSession? session = ref.read(sessionProvider);
-      final String target = switch (session) {
-        null => RegisterScreen.routeName,
-        AuthSession(onboardingRequired: true) =>
-          RegisterEmailScreen.googleRouteName,
-        _ => KosplyMainLayout.routeName,
-      };
-      Navigator.of(context).pushReplacementNamed(target);
-    });
+    unawaited(_leave());
+  }
+
+  /// @notice Leaves the splash after permissions and the brand delay.
+  /// @return Future completing when the next route is up, or when this
+  /// screen was disposed first.
+  Future<void> _leave() async {
+    await Future.wait<void>(<Future<void>>[
+      ref.read(startupPermissionsProvider).ask(),
+      Future<void>.delayed(const Duration(seconds: 2)),
+    ]);
+    if (!mounted) {
+      return;
+    }
+    final AuthSession? session = ref.read(sessionProvider);
+    final String target = switch (session) {
+      null => RegisterScreen.routeName,
+      AuthSession(onboardingRequired: true) =>
+        RegisterEmailScreen.googleRouteName,
+      _ => KosplyMainLayout.routeName,
+    };
+    Navigator.of(context).pushReplacementNamed(target);
   }
 
   /// @notice Builds the centered logo composition.

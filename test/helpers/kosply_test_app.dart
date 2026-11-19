@@ -11,8 +11,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/core/auth/google_id_token.dart';
+import 'package:kosply_mobile/core/location/device_location.dart';
+import 'package:kosply_mobile/core/location/place_search.dart';
 import 'package:kosply_mobile/providers/account/session_provider.dart';
+import 'package:kosply_mobile/providers/location/location_label_provider.dart';
 import 'package:kosply_mobile/providers/network/api_provider.dart';
+import 'package:kosply_mobile/providers/startup/startup_permissions.dart';
 import 'package:kosply_mobile/providers/sync/app_sync_provider.dart';
 import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 
@@ -31,11 +35,14 @@ class _FixedGoogleIdToken implements GoogleIdTokenSource {
 /// Public catalogue and FAQ are always synced.
 /// @param overrides Provider overrides, e.g. a fake camera.
 /// @param signedIn Whether to open a session before the screen builds.
+/// @param backend In-memory API. A fresh one is created when omitted.
+/// @param location GPS stand-in. The default label has no pin.
 /// @return The ready {ProviderContainer}.
 Future<ProviderContainer> seededContainer({
   List<Override> overrides = const <Override>[],
   bool signedIn = true,
   FakeKosplyBackend? backend,
+  DeviceLocation? location,
 }) async {
   final FakeKosplyBackend api = backend ?? FakeKosplyBackend();
   final ProviderContainer container = ProviderContainer(
@@ -43,6 +50,13 @@ Future<ProviderContainer> seededContainer({
       httpClientProvider.overrideWithValue(api.client),
       apiBaseUrlProvider.overrideWithValue(FakeKosplyBackend.origin),
       googleIdTokenSourceProvider.overrideWithValue(_FixedGoogleIdToken()),
+      deviceLocationProvider.overrideWithValue(
+        location ?? const FixedDeviceLocation('ITB Ganesha'),
+      ),
+      placeSearchProvider.overrideWithValue(const EmptyPlaceSearch()),
+      startupPermissionsProvider.overrideWithValue(
+        const DisabledStartupPermissions(),
+      ),
       ...overrides,
     ],
   );
@@ -69,6 +83,8 @@ Future<ProviderContainer> seededContainer({
 /// @param signedIn Whether a fresh container signs in. Ignored when
 /// [container] is passed.
 /// @param overrides Provider overrides for a fresh container.
+/// @param backend In-memory API. A fresh one is created when omitted.
+/// @param location GPS stand-in. The default label has no pin.
 /// @return The seeded {ProviderContainer}.
 Future<ProviderContainer> pumpKosplyApp(
   WidgetTester tester,
@@ -80,6 +96,7 @@ Future<ProviderContainer> pumpKosplyApp(
   bool signedIn = true,
   List<Override> overrides = const <Override>[],
   FakeKosplyBackend? backend,
+  DeviceLocation? location,
 }) async {
   final ProviderContainer scope =
       container ??
@@ -87,6 +104,7 @@ Future<ProviderContainer> pumpKosplyApp(
         signedIn: signedIn,
         overrides: overrides,
         backend: backend,
+        location: location,
       );
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -94,7 +112,13 @@ Future<ProviderContainer> pumpKosplyApp(
       child:
           app?.call(home) ??
           MaterialApp(
-            navigatorObservers: <NavigatorObserver>[aiRouteObserver],
+            navigatorObservers: <NavigatorObserver>[
+              aiRouteObserver,
+              aiOverlayNavigatorObserver,
+            ],
+            builder: (BuildContext context, Widget? child) {
+              return AiOverlayLayer(child: child ?? const SizedBox.shrink());
+            },
             home: home,
             routes: routes ?? const <String, WidgetBuilder>{},
             onGenerateRoute: onGenerateRoute,

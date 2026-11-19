@@ -27,13 +27,21 @@ class SupportRepository {
   /// @param dao Drift access to the support cache.
   /// @param api Backend client.
   /// @return A new {SupportRepository} instance.
-  SupportRepository({required this.dao, required this.api});
+  SupportRepository({
+    required this.dao,
+    required this.api,
+    this.currentUserId = '',
+  });
 
   /// @dev Drift access to the support cache.
   final SupportDao dao;
 
   /// @dev Backend client.
   final ApiClient api;
+
+  /// @dev Backend id of the signed-in student. Empty in tests that only
+  /// distinguish bubbles by role.
+  final String currentUserId;
 
   /// @dev Identity shown for staff replies. Staff names stay private, so
   /// every admin bubble reads as the support desk.
@@ -106,7 +114,9 @@ class SupportRepository {
     final Map<String, dynamic> item =
         json.object('item') ?? const <String, dynamic>{};
     final int now = utcMillisNow();
-    await dao.upsertTickets(tickets: <SupportTicketsCompanion>[_ticketRow(item, now)]);
+    await dao.upsertTickets(
+      tickets: <SupportTicketsCompanion>[_ticketRow(item, now)],
+    );
     await dao.replaceTicketMessages(
       ticketId: ticketId,
       rows: <SupportMessagesCompanion>[
@@ -137,7 +147,9 @@ class SupportRepository {
     );
     final Map<String, dynamic> item = _ticketOf(json);
     final int now = utcMillisNow();
-    await dao.upsertTickets(tickets: <SupportTicketsCompanion>[_ticketRow(item, now)]);
+    await dao.upsertTickets(
+      tickets: <SupportTicketsCompanion>[_ticketRow(item, now)],
+    );
     return item.str('id');
   }
 
@@ -206,33 +218,38 @@ class SupportRepository {
   /// @notice Streams the cached tickets with their latest bubble.
   /// @return Stream of tickets.
   Stream<List<SupportTicket>> watchTickets() {
-    return combineLatest2(
-      dao.watchTickets(),
-      dao.watchAllTicketMessages(),
-      (List<SupportTicketRow> tickets, List<SupportMessageRow> messages) {
-        return <SupportTicket>[
-          for (final SupportTicketRow ticket in tickets)
-            _toTicket(ticket, messages),
-        ];
-      },
-    );
+    return combineLatest2(dao.watchTickets(), dao.watchAllTicketMessages(), (
+      List<SupportTicketRow> tickets,
+      List<SupportMessageRow> messages,
+    ) {
+      return <SupportTicket>[
+        for (final SupportTicketRow ticket in tickets)
+          _toTicket(ticket, messages),
+      ];
+    });
   }
 
   /// @notice Streams one ticket's thread, oldest first.
   /// @param ticketId Ticket id.
   /// @return Stream of messages.
   Stream<List<ChatMessage>> watchTicketMessages(String ticketId) {
-    return dao.watchTicketMessages(ticketId).map(
-      (List<SupportMessageRow> rows) => <ChatMessage>[
-        for (final SupportMessageRow row in rows)
-          ChatMessage(
-            id: row.id,
-            text: row.body,
-            isMine: row.senderRole == 'USER',
-            timeLabel: timeLabelFor(row.createdAt),
-          ),
-      ],
-    );
+    return dao
+        .watchTicketMessages(ticketId)
+        .map(
+          (List<SupportMessageRow> rows) => <ChatMessage>[
+            for (final SupportMessageRow row in rows)
+              ChatMessage(
+                id: row.id,
+                text: row.body,
+                isMine: supportMessageIsMine(
+                  senderId: row.senderId,
+                  senderRole: row.senderRole,
+                  currentUserId: currentUserId,
+                ),
+                timeLabel: timeLabelFor(row.createdAt),
+              ),
+          ],
+        );
   }
 
   /// @notice Reads the ticket from a create or reply response.
@@ -295,7 +312,13 @@ class SupportRepository {
         : threadMessages.last;
     final int unread = threadMessages
         .where(
-          (SupportMessageRow item) => !item.isRead && item.senderRole != 'USER',
+          (SupportMessageRow item) =>
+              !item.isRead &&
+              !supportMessageIsMine(
+                senderId: item.senderId,
+                senderRole: item.senderRole,
+                currentUserId: currentUserId,
+              ),
         )
         .length;
     return SupportTicket(
@@ -320,4 +343,25 @@ class SupportRepository {
     }
     return category[0] + category.substring(1).toLowerCase();
   }
+}
+
+/// @notice Whether a ticket bubble belongs to the signed-in student.
+/// @dev The backend stores `BUYER` or `SELLER` for the student and `ADMIN` or
+/// `SUPER_ADMIN` for the desk. Older rows used `USER`. A matching sender id
+/// wins; a missing id falls back to the role so a staff reply stays on the left.
+/// @param senderId Backend id on the message. Empty for a dashboard operator.
+/// @param senderRole Role stored on the message.
+/// @param currentUserId Backend id of the signed-in student.
+/// @return True when the bubble sits on the student's side.
+bool supportMessageIsMine({
+  required String senderId,
+  required String senderRole,
+  required String currentUserId,
+}) {
+  if (currentUserId.isNotEmpty && senderId.isNotEmpty) {
+    return senderId == currentUserId;
+  }
+  return senderRole == 'USER' ||
+      senderRole == 'BUYER' ||
+      senderRole == 'SELLER';
 }

@@ -10,7 +10,6 @@ import '../../../models/support/help_topic.dart';
 import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../core/ui_bridge/ui_bridge_scope.dart';
-import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @title HelpDeskScreen
@@ -73,46 +72,44 @@ class _HelpDeskScreenState extends ConsumerState<HelpDeskScreen> {
           ),
         ),
       ),
-      body: AiOverlayLayer(
-        child: UiBridgeScope(
-          screen: 'help',
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: KosplyColors.surfaceOf(context),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: KosplyColors.outlineOf(context)),
-                ),
-                child: Column(
-                  children: [
-                    for (int i = 0; i < topics.length; i++) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          thickness: 1,
-                          indent: 16,
-                          endIndent: 16,
-                          color: KosplyColors.outlineOf(context),
-                        ),
-                      _HelpTopicRow(
-                        topic: topics[i],
-                        expanded: topics[i].title == _expandedTitle,
-                        onTap: () {
-                          setState(() {
-                            _expandedTitle = topics[i].title == _expandedTitle
-                                ? null
-                                : topics[i].title;
-                          });
-                        },
-                      ),
-                    ],
-                  ],
-                ),
+      body: UiBridgeScope(
+        screen: 'help',
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: KosplyColors.surfaceOf(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: KosplyColors.outlineOf(context)),
               ),
-            ],
-          ),
+              child: Column(
+                children: [
+                  for (int i = 0; i < topics.length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        indent: 16,
+                        endIndent: 16,
+                        color: KosplyColors.outlineOf(context),
+                      ),
+                    _HelpTopicRow(
+                      topic: topics[i],
+                      expanded: topics[i].title == _expandedTitle,
+                      onTap: () {
+                        setState(() {
+                          _expandedTitle = topics[i].title == _expandedTitle
+                              ? null
+                              : topics[i].title;
+                        });
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

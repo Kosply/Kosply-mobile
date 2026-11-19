@@ -54,8 +54,7 @@ class SessionRepository {
       provider: _providerFrom(await secure.read(StorageKeys.authProvider)),
       accessToken: access,
       refreshToken: refresh,
-      onboardingRequired:
-          await secure.read(StorageKeys.authOnboarding) == '1',
+      onboardingRequired: await secure.read(StorageKeys.authOnboarding) == '1',
       userId: await secure.read(StorageKeys.authUserId) ?? '',
       username: await secure.read(StorageKeys.authUsername) ?? '',
       role: await secure.read(StorageKeys.authRole) ?? 'BUYER',
@@ -301,6 +300,24 @@ class SessionRepository {
     await secure.delete(StorageKeys.authUserId);
     await secure.delete(StorageKeys.authUsername);
     await secure.delete(StorageKeys.authRole);
+    await secure.delete(StorageKeys.authNim);
+  }
+
+  /// @notice Keeps the student number from onboarding for verification.
+  /// @param nim Digits typed on the student-number step.
+  /// @return Future completing when the key is stored.
+  Future<void> rememberNim(String nim) async {
+    final String text = nim.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    await secure.write(StorageKeys.authNim, text);
+  }
+
+  /// @notice Student number saved at onboarding, or empty.
+  /// @return The stored NIM.
+  Future<String> readNim() async {
+    return (await secure.read(StorageKeys.authNim))?.trim() ?? '';
   }
 
   /// @notice Builds a session from an auth response.

@@ -1,13 +1,10 @@
 /// @title PhosphorGlyph
 /// @notice Minimal Phosphor icon set bundled through the app's own fonts.
-/// @dev Two workarounds are stacked here. First, the `phosphor_flutter`
-/// package cannot be used on this SDK: it declares
-/// `class PhosphorIconData extends IconData`, and `IconData` is a final class,
-/// which fails at compile time. Second, fonts declared under `flutter.fonts`
-/// are still subject to icon tree-shaking, and a subset built from `IconData`
-/// constants came out empty. Rendering the code point as text keeps the font
-/// intact, because text fonts are not shaken. The TTFs live in
-/// assets/fonts and are declared in pubspec.yaml.
+/// @dev The `phosphor_flutter` package cannot be used on this SDK: it
+/// declares `class PhosphorIconData extends IconData`, and `IconData` is a
+/// final class, which fails at compile time. Glyphs are drawn as text so the
+/// bundled font is not tree-shaken. Even leading keeps the mark in the middle
+/// of the box. The TTFs live in assets/fonts and are declared in pubspec.yaml.
 /// @author Kosply-mobile
 library;
 
@@ -85,7 +82,7 @@ class PhosphorCode {
   /// @dev Plus, used on the chat composer attach control.
   static const int plus = 0xe3d4;
 
-  /// @dev Microphone, used on the chat composer voice control.
+  /// @dev Microphone glyph. No composer shows it.
   static const int microphone = 0xe326;
 
   /// @dev Clock, used on last-active lines.
@@ -144,6 +141,9 @@ class PhosphorCode {
 
   /// @dev Cross, used to remove a captured photo.
   static const int x = 0xe4f6;
+
+  /// @dev Upload arrow, used on the KTM photo step.
+  static const int uploadSimple = 0xe4b0;
 }
 
 /// @title PhosphorGlyph
@@ -183,14 +183,21 @@ class PhosphorGlyph extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: Text(
-        String.fromCharCode(codePoint),
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontFamily: weight.fontFamily,
-          fontSize: size,
-          height: 1,
-          color: color,
+      child: Center(
+        child: Text(
+          String.fromCharCode(codePoint),
+          textAlign: TextAlign.center,
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+          style: TextStyle(
+            fontFamily: weight.fontFamily,
+            fontSize: size,
+            height: 1,
+            leadingDistribution: TextLeadingDistribution.even,
+            color: color,
+          ),
         ),
       ),
     );

@@ -10,6 +10,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../data/notifications/notification_repository.dart';
 import '../../../models/notifications/app_notification.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @dev The latest page. Invalidated after a read.
 final notificationInboxProvider =
@@ -45,9 +47,8 @@ class NotificationInboxScreen extends ConsumerWidget {
       ref.invalidate(notificationInboxProvider);
     } on ApiException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.userMessage)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
       }
     }
   }
@@ -94,7 +95,13 @@ class NotificationInboxScreen extends ConsumerWidget {
         ),
         data: (List<AppNotification> items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Belum ada notifikasi.'));
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: EmptyStateCard(
+                icon: PhosphorCode.bell,
+                message: 'Belum ada notifikasi.',
+              ),
+            );
           }
           return ListView.separated(
             key: const Key('notification-list'),
@@ -109,7 +116,11 @@ class NotificationInboxScreen extends ConsumerWidget {
                 subtitle: Text(item.body),
                 trailing: item.isRead
                     ? null
-                    : const Icon(Icons.circle, size: 8, color: KosplyColors.primary),
+                    : const Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: KosplyColors.primary,
+                      ),
                 onTap: () => _open(ref, item),
               );
             },

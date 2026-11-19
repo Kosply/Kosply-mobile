@@ -19,7 +19,11 @@ import '../../core/ui_bridge/ui_commands.dart';
 import '../../data/chat/ai_chat_repository.dart';
 import '../../models/chat/ai_thread.dart';
 import '../../models/chat/ai_turn.dart';
+import '../../models/chat/listing_proposal.dart';
 import '../account/session_provider.dart';
+import '../catalog/listing_draft_provider.dart';
+import '../catalog/listing_photos_provider.dart';
+import '../catalog/product_form_fill_provider.dart';
 import '../network/api_provider.dart';
 
 /// @dev Home AI repository backed by the Drift cache and `/api/ai/*`.
@@ -121,6 +125,10 @@ class AiChatState {
 /// @notice Mutates the Home AI overlay and persists appended exchanges.
 class AiChatNotifier extends Notifier<AiChatState> {
   int _seq = 0;
+
+  /// @dev Uploaded listing photos, keyed by the local path, so a second ask
+  /// does not upload the same file again.
+  final Map<String, String> _photoUrls = <String, String>{};
 
   /// @notice Starts collapsed and hydrates the history from the cache.
   /// @return The initial {AiChatState}.
@@ -353,19 +361,27 @@ class AiChatNotifier extends Notifier<AiChatState> {
     required String bubbleId,
     required bool approve,
   }) async {
-    if (_bubble(threadId, bubbleId)?.needsApproval != true) {
+    final AiMessage? current = _bubble(threadId, bubbleId);
+    if (current?.needsApproval != true) {
       return;
     }
+    // Keep the question and the reasoning card. Replacing them with the
+    // typing placeholder made Setujui look like the conversation restarted.
+    final ListingProposal? proposal = current!.proposal;
     _paint(
       threadId,
       bubbleId,
-      text: aiPendingText,
-      thinking: '',
+      text: current.text,
+      thinking: current.thinking,
       pending: true,
       needsApproval: false,
+      draft: current.draft,
+      proposal: proposal,
     );
     final AiChatRepository repo = ref.read(aiChatRepositoryProvider);
     String reply;
+    List<UiCallback> callbacks = const <UiCallback>[];
+    Object? failure;
     try {
       final AiTurn turn = await repo.resume(
         conversationId: threadId,
@@ -374,8 +390,10 @@ class AiChatNotifier extends Notifier<AiChatState> {
       reply = turn.answer.isEmpty
           ? (approve ? 'Disetujui.' : 'Ditolak.')
           : turn.answer;
+      callbacks = turn.callbacks;
     } on ApiException catch (error) {
       reply = error.userMessage;
+      failure = error;
     }
     if (!ref.mounted) {
       return;
@@ -384,11 +402,46 @@ class AiChatNotifier extends Notifier<AiChatState> {
       threadId,
       bubbleId,
       text: reply,
-      thinking: '',
+      thinking: current.thinking,
       pending: false,
       needsApproval: false,
       persist: true,
     );
+    if (failure != null) {
+      return;
+    }
+    if (proposal != null) {
+      if (approve) {
+        _applyForm(proposal);
+      }
+      return;
+    }
+    if (callbacks.isNotEmpty) {
+      ref.read(uiCommandsProvider.notifier).enqueue(callbacks);
+    }
+  }
+
+  /// @notice Writes an approved proposal and opens the form when it is closed.
+  /// @param proposal Fields the student just approved.
+  /// @return void
+  void _applyForm(ListingProposal proposal) {
+    ref
+        .read(productFormFillProvider.notifier)
+        .write(
+          title: proposal.title,
+          price: proposal.price,
+          description: proposal.description,
+          category: proposal.category,
+        );
+    if (ref.read(addProductPresenceProvider).mounted) {
+      return;
+    }
+    ref.read(uiCommandsProvider.notifier).enqueue(<UiCallback>[
+      const UiCallback(
+        name: UiCallbacks.openScreen,
+        args: <String, Object?>{'screen': 'add-product'},
+      ),
+    ]);
   }
 
   /// @notice Asks the backend and swaps the pending bubble for the result.
@@ -400,13 +453,36 @@ class AiChatNotifier extends Notifier<AiChatState> {
     final AiChatRepository repo = ref.read(aiChatRepositoryProvider);
     String reply;
     String thinking = '';
+    String draft = '';
+    ListingProposal? proposal;
     bool needsApproval = false;
     List<UiCallback> callbacks = const <UiCallback>[];
+    final List<String> imageUrls;
+    try {
+      imageUrls = await _listingImageUrls();
+    } catch (error) {
+      if (!ref.mounted) {
+        return;
+      }
+      _paint(
+        threadId,
+        bubbleId,
+        text: error is ApiException
+            ? error.userMessage
+            : 'Foto belum bisa dikirim ke AI.',
+        thinking: '',
+        pending: false,
+        needsApproval: false,
+        persist: true,
+      );
+      return;
+    }
     try {
       final AiTurn turn = await repo.ask(
         conversationId: threadId,
         message: prompt,
         uiState: ref.read(uiBridgeProvider).toJson(),
+        imageUrls: imageUrls,
         onPartial: (String nextThinking, String nextAnswer) {
           if (!ref.mounted) {
             return;
@@ -421,10 +497,10 @@ class AiChatNotifier extends Notifier<AiChatState> {
           );
         },
       );
-      reply = turn.answer.isEmpty
-          ? 'AI tidak mengirim jawaban.'
-          : turn.answer;
+      reply = turn.answer.isEmpty ? 'AI tidak mengirim jawaban.' : turn.answer;
       thinking = turn.thinking;
+      draft = turn.draft;
+      proposal = turn.proposal;
       needsApproval = turn.needsApproval;
       callbacks = turn.callbacks;
     } on ApiException catch (error) {
@@ -440,6 +516,8 @@ class AiChatNotifier extends Notifier<AiChatState> {
       thinking: thinking,
       pending: needsApproval,
       needsApproval: needsApproval,
+      draft: draft,
+      proposal: proposal,
       persist: !needsApproval,
     );
     if (needsApproval) {
@@ -499,6 +577,8 @@ class AiChatNotifier extends Notifier<AiChatState> {
     required String thinking,
     required bool pending,
     required bool needsApproval,
+    String draft = '',
+    ListingProposal? proposal,
     bool persist = false,
   }) {
     AiThread? thread;
@@ -522,6 +602,8 @@ class AiChatNotifier extends Notifier<AiChatState> {
                   pending: pending,
                   thinking: thinking,
                   needsApproval: needsApproval,
+                  draft: draft,
+                  proposal: proposal,
                 )
               : message,
       ],
@@ -530,6 +612,34 @@ class AiChatNotifier extends Notifier<AiChatState> {
     if (persist) {
       unawaited(ref.read(aiChatRepositoryProvider).persistThread(settled));
     }
+  }
+
+  /// @notice Uploads the seller's captured photos once and returns their URLs.
+  /// @dev An empty camera roll sends a normal chat turn. A failed upload
+  /// stops the turn so the model is not asked to describe photos it cannot see.
+  /// @return http(s) URLs, cover first.
+  Future<List<String>> _listingImageUrls() async {
+    final List<String> paths = ref.read(listingPhotosProvider).paths;
+    if (paths.isEmpty) {
+      return const <String>[];
+    }
+    final List<String> urls = <String>[];
+    for (final String path in paths) {
+      final String? cached = _photoUrls[path];
+      if (cached != null && cached.isNotEmpty) {
+        urls.add(cached);
+        continue;
+      }
+      final String url = await ref
+          .read(uploadRepositoryProvider)
+          .uploadImage(path);
+      if (url.isEmpty) {
+        continue;
+      }
+      _photoUrls[path] = url;
+      urls.add(url);
+    }
+    return urls;
   }
 
   /// @notice Puts [thread] first in the list, replacing its old copy.

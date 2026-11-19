@@ -1,8 +1,8 @@
 /// @title AnalyticScreen
-/// @notice Seller metrics plus catalogue sections spawned like Home.
+/// @notice Seller metrics plus the full shelf.
 /// @dev Tiles read `GET /api/analytics/seller` (last 30 days; saves are the
-/// current count). The sections rank the signed-in seller's own shelf by that
-/// interest and by remaining stock.
+/// current count). Trading, Paling diminati, and Hampir habis live on the
+/// Jual tab. "Semua product kamu" stays here, and an empty shelf shows a card.
 /// @author Kosply-mobile
 library;
 
@@ -16,10 +16,11 @@ import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
 import '../../../providers/catalog/seller_analytics_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
 import '../../../widgets/common/headings/section_heading.dart';
 import '../../../widgets/seller/appbar/seller_app_bar.dart';
-import '../../main/home/see_all_screen.dart';
 
 /// @title AnalyticScreen
 /// @notice Analytic destination opened from Settings or Jual.
@@ -66,11 +67,7 @@ class AnalyticScreen extends ConsumerWidget {
     return Navigator.of(context).pushNamed(routeName);
   }
 
-  void _openSeeAll(BuildContext context, String title, List<Product> items) {
-    SeeAllScreen.push(context, title: title, items: items);
-  }
-
-  /// @notice Builds the metric grid and catalogue sections.
+  /// @notice Builds the metric grid and the shelf.
   /// @param context The build context.
   /// @param ref Riverpod handle.
   /// @return The screen widget.
@@ -83,21 +80,6 @@ class AnalyticScreen extends ConsumerWidget {
     final Seller? seller = ref.watch(sellerProvider(sellerId)).value;
     final List<Product> listed =
         ref.watch(sellerProductsProvider(sellerId)).value ?? const <Product>[];
-    final List<Product> all =
-        ref.watch(catalogProductsProvider).value ?? const <Product>[];
-    final List<Product> trading = listed.take(4).toList();
-    final Map<String, int> interest =
-        analytics?.interestByProduct ?? const <String, int>{};
-    final List<Product> byInterest = List<Product>.of(listed)
-      ..sort(
-        (Product a, Product b) =>
-            (interest[b.id] ?? 0).compareTo(interest[a.id] ?? 0),
-      );
-    final List<Product> popular = byInterest.take(4).toList();
-    final List<Product> byStock = List<Product>.of(listed)
-      ..sort((Product a, Product b) => a.quantity.compareTo(b.quantity));
-    final List<Product> lowStock = byStock.take(4).toList();
-    final List<Product> recent = all.take(4).toList();
 
     if (seller == null) {
       return Scaffold(
@@ -115,37 +97,16 @@ class AnalyticScreen extends ConsumerWidget {
         children: [
           _MetricGrid(metrics: metrics),
           const SizedBox(height: 24),
-          SectionHeading(
-            'Trading product kamu',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Trading product kamu', trading),
-          ),
+          const SectionHeading('Semua product kamu'),
           const SizedBox(height: 12),
-          ProductGrid(items: trading),
-          const SizedBox(height: 24),
-          SectionHeading(
-            'Paling diminati',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Paling diminati', byInterest),
-          ),
-          const SizedBox(height: 12),
-          ProductGrid(items: popular),
-          const SizedBox(height: 24),
-          SectionHeading(
-            'Hampir habis',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Hampir habis', byStock),
-          ),
-          const SizedBox(height: 12),
-          ProductGrid(items: lowStock),
-          const SizedBox(height: 24),
-          SectionHeading(
-            'Baru dilihat',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Baru dilihat', all),
-          ),
-          const SizedBox(height: 12),
-          ProductGrid(items: recent),
+          if (listed.isEmpty)
+            const EmptyStateCard(
+              key: Key('analytic-empty-shelf'),
+              icon: PhosphorCode.package,
+              message: 'Belum ada barang yang kamu pasang.',
+            )
+          else
+            ProductGrid(items: listed.take(4).toList()),
         ],
       ),
     );

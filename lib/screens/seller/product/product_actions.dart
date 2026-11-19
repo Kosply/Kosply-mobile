@@ -13,6 +13,7 @@ import '../../../data/catalog/catalog_repository.dart';
 import '../../../models/catalog/product.dart';
 import '../../../providers/catalog/catalog_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/forms/location_suggest_field.dart';
 
 /// @notice Opens the owner menu and runs the chosen write.
 /// @param context The build context.
@@ -81,9 +82,8 @@ Future<bool> showListingActions(
     }
   } on ApiException catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.userMessage)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.userMessage)));
     }
   }
   return false;
@@ -147,6 +147,10 @@ class _EditListingDialogState extends State<_EditListingDialog> {
   late final TextEditingController _description = TextEditingController(
     text: widget.product.description,
   );
+  late double? _latitude = _storedPin(widget.product.latitude);
+  late double? _longitude = _storedPin(widget.product.longitude);
+
+  double? _storedPin(double value) => value.abs() > 0.000001 ? value : null;
 
   @override
   void dispose() {
@@ -164,7 +168,10 @@ class _EditListingDialogState extends State<_EditListingDialog> {
     final String description = _description.text.trim();
     final int? price = int.tryParse(_price.text.trim());
     final int? stock = int.tryParse(_stock.text.trim());
-    if (title.isEmpty || description.isEmpty || price == null || stock == null) {
+    if (title.isEmpty ||
+        description.isEmpty ||
+        price == null ||
+        stock == null) {
       return;
     }
     Navigator.of(context).pop(
@@ -183,12 +190,19 @@ class _EditListingDialogState extends State<_EditListingDialog> {
                   .where((String path) => path.startsWith('http'))
                   .toList(),
         locationLabel: _location.text.trim(),
+        latitude: _latitude,
+        longitude: _longitude,
+        includeCoordinates: true,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final TextStyle fieldStyle = TextStyle(
+      fontSize: 16,
+      color: KosplyColors.textPrimaryOf(context),
+    );
     return AlertDialog(
       title: const Text('Ubah barang'),
       content: SingleChildScrollView(
@@ -198,31 +212,46 @@ class _EditListingDialogState extends State<_EditListingDialog> {
             TextField(
               key: const Key('edit-title'),
               controller: _title,
+              cursorColor: KosplyColors.primary,
+              style: fieldStyle,
               decoration: const InputDecoration(labelText: 'Nama'),
             ),
             TextField(
               key: const Key('edit-price'),
               controller: _price,
               keyboardType: TextInputType.number,
+              cursorColor: KosplyColors.primary,
+              style: fieldStyle,
               decoration: const InputDecoration(labelText: 'Harga'),
             ),
             TextField(
               controller: _stock,
               keyboardType: TextInputType.number,
+              cursorColor: KosplyColors.primary,
+              style: fieldStyle,
               decoration: const InputDecoration(labelText: 'Stok'),
             ),
             TextField(
               controller: _category,
+              cursorColor: KosplyColors.primary,
+              style: fieldStyle,
               decoration: const InputDecoration(labelText: 'Kategori'),
             ),
-            TextField(
+            LocationSuggestField(
               controller: _location,
-              decoration: const InputDecoration(labelText: 'Lokasi'),
+              latitude: _latitude,
+              longitude: _longitude,
+              onPin: (double? latitude, double? longitude) {
+                _latitude = latitude;
+                _longitude = longitude;
+              },
             ),
             TextField(
               controller: _description,
               minLines: 2,
               maxLines: 4,
+              cursorColor: KosplyColors.primary,
+              style: fieldStyle,
               decoration: const InputDecoration(labelText: 'Deskripsi'),
             ),
           ],

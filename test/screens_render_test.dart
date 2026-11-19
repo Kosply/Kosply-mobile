@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/layouts/main_layout.dart';
-import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 import 'package:kosply_mobile/main.dart';
 import 'package:kosply_mobile/screens/auth/forgot_password/forgot_password_screen.dart';
 import 'package:kosply_mobile/screens/main/home/home_screen.dart';
@@ -38,6 +37,7 @@ import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
 import 'package:kosply_mobile/widgets/common/brand/kosply_wordmark.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 
+import 'helpers/fake_backend.dart';
 import 'helpers/fixtures/placeholder_catalog.dart';
 import 'helpers/kosply_test_app.dart';
 
@@ -128,7 +128,7 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await pumpKosplyApp(tester, const AiOverlayLayer(child: HomeScreen()));
+    await pumpKosplyApp(tester, const HomeScreen());
 
     expect(find.byType(ProductGrid), findsWidgets);
     expect(find.byKey(const Key('ai-fab')), findsOneWidget);
@@ -180,12 +180,39 @@ void main() {
 
     await tester.tap(find.text('Penjual'));
     await tester.pumpAndSettle();
-    expect(find.text('Jual'), findsOneWidget);
+    expect(find.text('Welcome'), findsOneWidget);
+    expect(find.text('Jual'), findsNothing);
+  });
 
+  testWidgets('an approved seller sees the Jual tab', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final FakeKosplyBackend backend = FakeKosplyBackend()
+      ..verification = <String, dynamic>{
+        'id': 'verify-1',
+        'status': 'APPROVED',
+        'namaLengkap': 'Fajar Uji',
+        'nim': '253140701111034',
+        'universitas': 'Universitas Brawijaya',
+        'programStudi': 'S1 Teknik Informatika',
+        'rejectionReason': '',
+      };
+    await pumpKosplyApp(tester, const KosplyMainLayout(), backend: backend);
+
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Penjual'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jual'), findsOneWidget);
+    expect(find.text('Welcome'), findsNothing);
     await tester.tap(find.text('Jual'));
     await tester.pumpAndSettle();
     expect(find.byType(JualScreen), findsOneWidget);
-    expect(find.text('Cari barang jualan...'), findsOneWidget);
   });
 
   testWidgets('settings screen renders without layout errors', (

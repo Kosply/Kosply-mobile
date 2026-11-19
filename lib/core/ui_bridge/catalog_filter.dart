@@ -31,9 +31,7 @@ class CatalogFilter {
 
   /// @notice Whether any constraint is set.
   bool get isActive =>
-      query.trim().isNotEmpty ||
-      category.trim().isNotEmpty ||
-      maxPrice != null;
+      query.trim().isNotEmpty || category.trim().isNotEmpty || maxPrice != null;
 
   /// @notice Whether [product] survives this filter.
   /// @param product Catalogue item.
@@ -68,7 +66,7 @@ class CatalogFilter {
 }
 
 /// @title CatalogFilterNotifier
-/// @notice Holds the catalogue filter the AI and the search field share.
+/// @notice Holds the catalogue filter the AI applies to Home and Search.
 class CatalogFilterNotifier extends Notifier<CatalogFilter> {
   /// @notice Starts with no constraints.
   /// @return An empty {CatalogFilter}.

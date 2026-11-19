@@ -158,7 +158,12 @@ class _CodeBox extends StatelessWidget {
         maxLength: 1,
         onChanged: onChanged,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        cursorColor: KosplyColors.primary,
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: KosplyColors.textPrimaryOf(context),
+        ),
         decoration: const InputDecoration(
           counterText: '',
           border: InputBorder.none,

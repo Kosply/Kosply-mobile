@@ -1,6 +1,5 @@
 /// @title SearchScreen
-/// @notice Search tab: the shared search bar and the catalogue from the
-/// backend, newest listings last in the "Dibuka terakhir" slice.
+/// @notice Search tab: the shared search bar and products opened from search.
 /// @author Kosply-mobile
 library;
 
@@ -13,7 +12,10 @@ import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../core/ui_bridge/ui_ids.dart';
 import '../../../models/catalog/product.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/catalog/search_opens_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
 import '../../../widgets/common/search/catalog_search_field.dart';
 import '../../../widgets/common/headings/section_heading.dart';
@@ -27,11 +29,7 @@ class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
 
   void _openSeeAll(BuildContext context, List<Product> items) {
-    SeeAllScreen.push(
-      context,
-      title: 'Dibuka terakhir',
-      items: items.reversed.toList(),
-    );
+    SeeAllScreen.push(context, title: 'Dibuka terakhir', items: items);
   }
 
   /// @notice Builds the search tab.
@@ -46,7 +44,14 @@ class SearchScreen extends ConsumerWidget {
         (ref.watch(catalogProductsProvider).value ?? const <Product>[])
             .where(filter.allows)
             .toList();
-    final List<Product> recentItems = items.reversed.take(4).toList();
+    final Map<String, Product> byId = <String, Product>{
+      for (final Product item in items) item.id: item,
+    };
+    final List<Product> opened = <Product>[
+      for (final String id in ref.watch(searchOpensProvider))
+        if (byId[id] != null) byId[id]!,
+    ];
+    final List<Product> recentItems = opened.take(4).toList();
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -69,11 +74,22 @@ class SearchScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             SectionHeading(
               'Dibuka terakhir',
-              actionLabel: 'Lihat semua',
-              onTap: () => _openSeeAll(context, items),
+              actionLabel: opened.isEmpty ? null : 'Lihat semua',
+              onTap: opened.isEmpty ? null : () => _openSeeAll(context, opened),
             ),
             const SizedBox(height: 12),
-            ProductGrid(items: recentItems, anchor: true, eventSource: 'search'),
+            if (recentItems.isEmpty)
+              const EmptyStateCard(
+                key: Key('search-opened-empty'),
+                icon: PhosphorCode.package,
+                message: 'Belum ada barang yang kamu buka dari pencarian.',
+              )
+            else
+              ProductGrid(
+                items: recentItems,
+                anchor: true,
+                eventSource: 'search',
+              ),
           ],
         ),
       ),

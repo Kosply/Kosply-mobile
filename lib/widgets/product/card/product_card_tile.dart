@@ -13,6 +13,7 @@ import '../../../core/ui_bridge/ui_commands.dart';
 import '../../../core/ui_bridge/ui_ids.dart';
 import '../../../models/catalog/product.dart';
 import '../../../providers/catalog/catalog_events.dart';
+import '../../../providers/catalog/search_opens_provider.dart';
 import '../../../screens/seller/product/product_view_screen.dart';
 import 'product_card.dart';
 
@@ -54,6 +55,9 @@ class ProductCardTile extends ConsumerWidget {
       imagePath: product.imagePath,
       highlighted: highlighted,
       onTap: () {
+        if (eventSource == 'search') {
+          ref.read(searchOpensProvider.notifier).record(product.id);
+        }
         ref
             .read(uiBridgeProvider.notifier)
             .recordClick(
@@ -102,7 +106,9 @@ class _ImpressionOnceState extends ConsumerState<_ImpressionOnce> {
       if (!mounted) {
         return;
       }
-      ref.read(catalogEventsProvider).impression(widget.productId, widget.source);
+      ref
+          .read(catalogEventsProvider)
+          .impression(widget.productId, widget.source);
     });
   }
 

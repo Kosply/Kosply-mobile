@@ -160,19 +160,22 @@ void main() {
     },
   );
 
-  test('account profile syncs the signed-in student and persists a save', () async {
-    final UserProfile synced = await account.watchProfile().first;
-    expect(synced.name, 'Kamu');
-    expect(synced.username, 'kamu');
+  test(
+    'account profile syncs the signed-in student and persists a save',
+    () async {
+      final UserProfile synced = await account.watchProfile().first;
+      expect(synced.name, 'Kamu');
+      expect(synced.username, 'kamu');
 
-    await account.saveProfile(
-      const UserProfile(name: 'Fajar', username: 'fajar', bio: 'kos'),
-    );
-    final UserProfile saved = await account.watchProfile().first;
-    expect(saved.name, 'Fajar');
-    expect(saved.username, 'fajar');
-    expect(saved.bio, 'kos');
-  });
+      await account.saveProfile(
+        const UserProfile(name: 'Fajar', username: 'fajar', bio: 'kos'),
+      );
+      final UserProfile saved = await account.watchProfile().first;
+      expect(saved.name, 'Fajar');
+      expect(saved.username, 'fajar');
+      expect(saved.bio, 'kos');
+    },
+  );
 
   test('inbox derives previews, time labels, and unread counts', () async {
     final List<Conversation> rows = await inbox.watchConversations().first;
@@ -213,9 +216,27 @@ void main() {
         .watchTicketMessages('ticket-1')
         .first;
     expect(messages, hasLength(3));
+    expect(messages.first.isMine, isTrue);
+    expect(messages[1].isMine, isFalse);
     expect(
       messages[1].text,
       contains('Hai, terima kasih sudah menghubungi Kosply'),
+    );
+    expect(
+      supportMessageIsMine(
+        senderId: 'student',
+        senderRole: 'BUYER',
+        currentUserId: 'student',
+      ),
+      isTrue,
+    );
+    expect(
+      supportMessageIsMine(
+        senderId: '',
+        senderRole: 'SUPER_ADMIN',
+        currentUserId: 'student',
+      ),
+      isFalse,
     );
   });
 

@@ -11,6 +11,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/location/nearby.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/ui_bridge/ui_bridge.dart';
 import '../../../core/ui_bridge/ui_bridge_scope.dart';
@@ -20,6 +21,7 @@ import '../../../models/catalog/seller.dart';
 import '../../../models/catalog/product_stats.dart';
 import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/location/location_label_provider.dart';
 import '../../../providers/catalog/favorites_provider.dart';
 import '../../../providers/catalog/seller_analytics_provider.dart';
 import '../../../providers/inbox/inbox_providers.dart';
@@ -91,14 +93,15 @@ class ProductViewScreen extends ConsumerWidget {
     if (product == null) {
       return const _MissingProduct();
     }
-    final List<Product> related =
-        ref
-            .watch(catalogProductsProvider)
-            .value
-            ?.where((Product item) => item.id != productId)
-            .take(4)
-            .toList() ??
-        const <Product>[];
+    final List<Product> related = nearestFirst(
+      ref
+              .watch(catalogProductsProvider)
+              .value
+              ?.where((Product item) => item.id != productId)
+              .toList() ??
+          const <Product>[],
+      fix: ref.watch(deviceFixProvider),
+    ).take(4).toList();
     final bool mine =
         product.sellerId.isNotEmpty &&
         product.sellerId == ref.watch(currentUserIdProvider);
@@ -106,54 +109,55 @@ class ProductViewScreen extends ConsumerWidget {
         ? ref.watch(productStatsProvider(productId)).value
         : null;
 
-    return Scaffold(
-      backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: AppBar(
+    return RouteGapHost(
+      gap: kBottomBarGap,
+      child: Scaffold(
         backgroundColor: KosplyColors.backgroundOf(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: PhosphorGlyph(
-            PhosphorCode.arrowLeft,
-            size: 20,
-            color: KosplyColors.textPrimaryOf(context),
-          ),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        actions: [
-          _FavoriteButton(productId: productId),
-          IconButton(
-            key: const Key('product-more'),
+        appBar: AppBar(
+          backgroundColor: KosplyColors.backgroundOf(context),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
             icon: PhosphorGlyph(
-              PhosphorCode.dotsThree,
-              weight: PhosphorWeight.bold,
+              PhosphorCode.arrowLeft,
               size: 20,
               color: KosplyColors.textPrimaryOf(context),
             ),
-            onPressed: () async {
-              if (mine) {
-                final bool gone = await showListingActions(
-                  context,
-                  ref,
-                  product,
-                );
-                if (gone && context.mounted) {
-                  Navigator.of(context).maybePop();
-                }
-                return;
-              }
-              await showReportSheet(
-                context,
-                productId: product.id,
-                userId: product.sellerId,
-              );
-            },
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: AiOverlayLayer(
-        child: UiBridgeScope(
+          actions: [
+            _FavoriteButton(productId: productId),
+            IconButton(
+              key: const Key('product-more'),
+              icon: PhosphorGlyph(
+                PhosphorCode.dotsThree,
+                weight: PhosphorWeight.bold,
+                size: 20,
+                color: KosplyColors.textPrimaryOf(context),
+              ),
+              onPressed: () async {
+                if (mine) {
+                  final bool gone = await showListingActions(
+                    context,
+                    ref,
+                    product,
+                  );
+                  if (gone && context.mounted) {
+                    Navigator.of(context).maybePop();
+                  }
+                  return;
+                }
+                await showReportSheet(
+                  context,
+                  productId: product.id,
+                  userId: product.sellerId,
+                );
+              },
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+        body: UiBridgeScope(
           screen: 'product_view',
           elements: <UiElement>[
             UiElement.product(product.id, label: product.title),
@@ -207,17 +211,17 @@ class ProductViewScreen extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: ChatSellerBar(
-        onPressed: () {
-          ref
-              .read(uiBridgeProvider.notifier)
-              .recordClick(
-                id: UiIds.button('chat', target: product.sellerId),
-                kind: UiElementKinds.button,
-              );
-          _openChat(context, ref);
-        },
+        bottomNavigationBar: ChatSellerBar(
+          onPressed: () {
+            ref
+                .read(uiBridgeProvider.notifier)
+                .recordClick(
+                  id: UiIds.button('chat', target: product.sellerId),
+                  kind: UiElementKinds.button,
+                );
+            _openChat(context, ref);
+          },
+        ),
       ),
     );
   }

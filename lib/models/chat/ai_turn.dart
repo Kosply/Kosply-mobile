@@ -6,6 +6,7 @@
 library;
 
 import '../../core/network/json_read.dart';
+import 'listing_proposal.dart';
 
 /// @title UiCallback
 /// @notice One safe screen action from the agent.
@@ -33,10 +34,8 @@ class UiCallback {
     final Object? raw = json['args'];
     final Map<String, Object?> args = raw is Map
         ? raw.map(
-            (Object? key, Object? value) => MapEntry<String, Object?>(
-              key.toString(),
-              value,
-            ),
+            (Object? key, Object? value) =>
+                MapEntry<String, Object?>(key.toString(), value),
           )
         : const <String, Object?>{};
     return UiCallback(name: name, args: args);
@@ -55,6 +54,8 @@ class AiTurn {
     this.thinking = '',
     this.callbacks = const <UiCallback>[],
     this.needsApproval = false,
+    this.draft = '',
+    this.proposal,
   });
 
   /// @dev Text shown in the chat bubble.
@@ -68,6 +69,12 @@ class AiTurn {
 
   /// @dev True when the stream ended on an approval interrupt.
   final bool needsApproval;
+
+  /// @dev Message text the approval will send. Empty on an ordinary turn.
+  final String draft;
+
+  /// @dev Seller form waiting for Setujui. Null when this turn is not one.
+  final ListingProposal? proposal;
 
   /// @notice Reads a chat response body.
   /// @param json Decoded `POST /api/ai/chat` body.

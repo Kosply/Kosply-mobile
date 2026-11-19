@@ -24,13 +24,15 @@ abstract final class StorageKeys {
   static const String notificationMessage = 'settings.notification.message';
 
   /// @dev New-thread channel flag.
-  static const String notificationNewMessage = 'settings.notification.new_message';
+  static const String notificationNewMessage =
+      'settings.notification.new_message';
 
   /// @dev Promo channel flag.
   static const String notificationPromo = 'settings.notification.promo';
 
   /// @dev Transaction channel flag.
-  static const String notificationTransaction = 'settings.notification.transaction';
+  static const String notificationTransaction =
+      'settings.notification.transaction';
 
   /// @dev Verification-result channel flag.
   static const String notificationVerification =
@@ -68,4 +70,7 @@ abstract final class StorageKeys {
 
   /// @dev Backend role of the signed-in account (`BUYER`, `SELLER`, ...).
   static const String authRole = 'auth.role';
+
+  /// @dev Student number typed during onboarding. Verification reuses it.
+  static const String authNim = 'auth.nim';
 }

@@ -65,7 +65,9 @@ class AccountRepository {
         photo: Value<String>(user.str('photo')),
         universitas: Value<String>(user.str('universitas')),
         programStudi: Value<String>(user.str('programStudi')),
-        role: Value<String>(user.str('role').isEmpty ? 'BUYER' : user.str('role')),
+        role: Value<String>(
+          user.str('role').isEmpty ? 'BUYER' : user.str('role'),
+        ),
         updatedAt: Value<int>(now),
         lastFetched: Value<int>(now),
       ),
@@ -102,6 +104,8 @@ class AccountRepository {
       username: row.username,
       bio: row.bio,
       avatarPath: row.photo,
+      universitas: row.universitas,
+      programStudi: row.programStudi,
     );
   }
 }

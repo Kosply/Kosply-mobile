@@ -14,6 +14,7 @@ import 'package:kosply_mobile/screens/seller/product/product_view_screen.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 import 'package:kosply_mobile/widgets/seller/appbar/seller_app_bar.dart';
 
+import 'helpers/fake_backend.dart';
 import 'helpers/kosply_test_app.dart';
 
 void _setPhone(WidgetTester tester) {
@@ -113,45 +114,58 @@ void main() {
     expect(find.text('Kipas angin meja'), findsNothing);
   });
 
-  testWidgets(
-    'analytic shows seller bar, metric cards, and catalogue sections',
-    (WidgetTester tester) async {
-      _setPhone(tester);
+  testWidgets('analytic hides empty sections and keeps an empty shelf card', (
+    WidgetTester tester,
+  ) async {
+    _setPhone(tester);
 
-      await pumpKosplyApp(tester, const AnalyticScreen());
+    await pumpKosplyApp(tester, const AnalyticScreen());
 
-      expect(find.byType(SellerAppBar), findsOneWidget);
-      expect(find.text('Kamu'), findsOneWidget);
-      expect(find.text('Views'), findsOneWidget);
-      expect(find.text('1.284'), findsOneWidget);
-      expect(find.text('Favorite'), findsOneWidget);
-      expect(find.text('46'), findsOneWidget);
-      expect(find.text('Chat'), findsOneWidget);
-      expect(find.text('18'), findsOneWidget);
-      expect(find.text('Terjual'), findsOneWidget);
-      expect(find.text('7'), findsOneWidget);
-      expect(find.text('Trading product kamu'), findsOneWidget);
-      expect(find.byType(ProductGrid), findsWidgets);
+    expect(find.byType(SellerAppBar), findsOneWidget);
+    expect(find.text('Kamu'), findsOneWidget);
+    expect(find.text('Views'), findsOneWidget);
+    expect(find.text('1.284'), findsOneWidget);
+    expect(find.text('Favorite'), findsOneWidget);
+    expect(find.text('46'), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('18'), findsOneWidget);
+    expect(find.text('Terjual'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('Trading product kamu'), findsNothing);
+    expect(find.text('Paling diminati'), findsNothing);
+    expect(find.text('Hampir habis'), findsNothing);
+    expect(find.byType(ProductGrid), findsNothing);
 
-      final Finder scroll = find.byKey(const Key('analytic-scroll'));
-      await tester.dragUntilVisible(
-        find.text('Paling diminati'),
-        scroll,
-        const Offset(0, -280),
-      );
-      await tester.dragUntilVisible(
-        find.text('Hampir habis'),
-        scroll,
-        const Offset(0, -280),
-      );
-      await tester.dragUntilVisible(
-        find.text('Baru dilihat'),
-        scroll,
-        const Offset(0, -280),
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+    final Finder scroll = find.byKey(const Key('analytic-scroll'));
+    await tester.dragUntilVisible(
+      find.text('Semua product kamu'),
+      scroll,
+      const Offset(0, -280),
+    );
+    expect(find.byKey(const Key('analytic-empty-shelf')), findsOneWidget);
+    expect(find.text('Belum ada barang yang kamu pasang.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('analytic shows catalogue sections once a product is listed', (
+    WidgetTester tester,
+  ) async {
+    _setPhone(tester);
+
+    final FakeKosplyBackend backend = FakeKosplyBackend();
+    backend.products['product-0']!['sellerId'] = FakeKosplyBackend.meId;
+
+    await pumpKosplyApp(tester, const AnalyticScreen(), backend: backend);
+
+    expect(find.text('Trading product kamu'), findsNothing);
+    expect(find.text('Paling diminati'), findsNothing);
+    expect(find.text('Hampir habis'), findsNothing);
+    expect(find.text('Belum ada barang yang kamu pasang.'), findsNothing);
+    expect(find.text('Semua product kamu'), findsOneWidget);
+    expect(find.text('Meja belajar lipat'), findsWidgets);
+    expect(find.byType(ProductGrid), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('new product uses stacked labels above fields', (
     WidgetTester tester,

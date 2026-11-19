@@ -1,9 +1,8 @@
 /// @title Listing draft provider
-/// @notice Drives the add-product form: upload photos, let the AI fill the
-/// card, then publish with the seller's price, quantity and meeting point.
-/// @dev The AI owns title, description and category; the form shows them
-/// locked. Uploaded URLs are kept, so "Coba lagi" after an AI failure does not
-/// upload the same five photos twice. Auto-disposed with the form.
+/// @notice Drives the add-product form: upload the seller's photos, then
+/// publish the fields they typed.
+/// @dev The listing model on the server stays available. This flow does not
+/// call it. Auto-disposed with the form.
 /// @author Kosply-mobile
 library;
 
@@ -12,8 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/api_exception.dart';
 import '../../data/catalog/catalog_repository.dart';
 import '../../data/uploads/upload_repository.dart';
-import '../../models/catalog/listing_card.dart';
-import '../chat/ai_chat_provider.dart';
 import '../network/api_provider.dart';
 import 'catalog_providers.dart';
 
@@ -23,21 +20,15 @@ final uploadRepositoryProvider = Provider<UploadRepository>(
 );
 
 /// @title ListingDraftStatus
-/// @notice Where the add-product flow is.
+/// @notice Where the add-product publish is.
 enum ListingDraftStatus {
-  /// @dev No photos yet; nothing to fill.
+  /// @dev Nothing is being sent.
   idle,
 
   /// @dev Photos are going to the server.
   uploading,
 
-  /// @dev The AI is reading the photos.
-  filling,
-
-  /// @dev The card is filled; the seller can publish.
-  ready,
-
-  /// @dev Uploading or filling failed; retry is offered.
+  /// @dev The last upload or post failed.
   failed,
 
   /// @dev The listing is being posted.
@@ -48,14 +39,13 @@ enum ListingDraftStatus {
 }
 
 /// @title ListingDraft
-/// @notice Immutable state of the add-product flow.
+/// @notice Immutable state of one publish attempt.
 class ListingDraft {
   /// @notice Creates a draft state.
   /// @param status Current step.
   /// @param uploaded Photos uploaded so far.
   /// @param total Photos to upload.
   /// @param imageUrls Uploaded URLs, cover first.
-  /// @param card The AI card once filled.
   /// @param error User-facing error of the last failure.
   /// @return A new {ListingDraft} instance.
   const ListingDraft({
@@ -63,7 +53,6 @@ class ListingDraft {
     this.uploaded = 0,
     this.total = 0,
     this.imageUrls = const <String>[],
-    this.card,
     this.error,
   });
 
@@ -79,19 +68,12 @@ class ListingDraft {
   /// @dev Uploaded URLs, cover first.
   final List<String> imageUrls;
 
-  /// @dev The AI card once filled.
-  final ListingCard? card;
-
   /// @dev User-facing error of the last failure.
   final String? error;
-
-  /// @notice Whether the AI fields are filled and locked.
-  bool get hasCard => card != null;
 
   /// @notice Whether a background step is running.
   bool get isBusy =>
       status == ListingDraftStatus.uploading ||
-      status == ListingDraftStatus.filling ||
       status == ListingDraftStatus.publishing;
 
   /// @notice Copies this state with selected fields replaced.
@@ -99,7 +81,6 @@ class ListingDraft {
   /// @param uploaded New upload count.
   /// @param total New total.
   /// @param imageUrls New URLs.
-  /// @param card New card.
   /// @param error New error; pass [clearError] to remove it.
   /// @param clearError Whether to drop the current error.
   /// @return A new {ListingDraft}.
@@ -108,7 +89,6 @@ class ListingDraft {
     int? uploaded,
     int? total,
     List<String>? imageUrls,
-    ListingCard? card,
     String? error,
     bool clearError = false,
   }) {
@@ -117,97 +97,99 @@ class ListingDraft {
       uploaded: uploaded ?? this.uploaded,
       total: total ?? this.total,
       imageUrls: imageUrls ?? this.imageUrls,
-      card: card ?? this.card,
       error: clearError ? null : (error ?? this.error),
     );
   }
 }
 
 /// @title ListingDraftNotifier
-/// @notice Runs upload → AI fill → publish for one listing.
+/// @notice Uploads photos and posts the seller's own listing fields.
 class ListingDraftNotifier extends Notifier<ListingDraft> {
   @override
   ListingDraft build() => const ListingDraft();
 
-  /// @notice Uploads [photoPaths] (skipping done ones) and asks the AI.
-  /// @dev Safe to call again after a failure: it resumes where it stopped.
-  /// @param photoPaths Local capture paths, cover first.
-  /// @return Future completing when the card is filled or the step failed.
-  Future<void> start(List<String> photoPaths) async {
-    if (photoPaths.isEmpty || state.isBusy || state.hasCard) {
-      return;
-    }
-    final List<String> urls = List<String>.of(state.imageUrls);
-    state = state.copyWith(
-      status: ListingDraftStatus.uploading,
-      uploaded: urls.length,
-      total: photoPaths.length,
-      clearError: true,
-    );
-    try {
-      final UploadRepository uploads = ref.read(uploadRepositoryProvider);
-      for (int i = urls.length; i < photoPaths.length; i++) {
-        urls.add(await uploads.uploadImage(photoPaths[i]));
-        if (!ref.mounted) {
-          return;
-        }
-        state = state.copyWith(uploaded: urls.length, imageUrls: List<String>.of(urls));
-      }
-      state = state.copyWith(status: ListingDraftStatus.filling);
-      final ListingCard card = await ref
-          .read(aiChatRepositoryProvider)
-          .fillListing(urls);
-      if (!ref.mounted) {
-        return;
-      }
-      state = state.copyWith(status: ListingDraftStatus.ready, card: card);
-    } on ApiException catch (error) {
-      _fail(error.userMessage);
-    } on FormatException {
-      _fail('AI belum bisa membaca foto ini. Coba lagi.');
-    } on Exception {
-      // A missing capture must not leave the banner spinning.
-      _fail('Foto belum bisa diunggah. Coba lagi.');
-    }
-  }
-
-  /// @notice Posts the listing with the seller's numbers.
+  /// @notice Uploads [photoPaths], then posts the listing.
+  /// @param title Item name the seller typed.
+  /// @param description Description the seller typed.
+  /// @param category Category the seller picked.
   /// @param price Integer rupiah.
   /// @param stock Units available.
   /// @param location Meeting point.
+  /// @param photoPaths Local capture paths, cover first.
+  /// @param latitude Pin for [location], when a suggestion or GPS filled it.
+  /// @param longitude Pin for [location], when a suggestion or GPS filled it.
   /// @return True when the listing is live.
   Future<bool> publish({
+    required String title,
+    required String description,
+    required String category,
     required int price,
     required int stock,
     required String location,
+    required List<String> photoPaths,
+    double? latitude,
+    double? longitude,
   }) async {
-    final ListingCard? card = state.card;
-    if (card == null || state.isBusy) {
+    final String name = title.trim();
+    final String about = description.trim();
+    final String picked = category.trim();
+    if (state.isBusy ||
+        name.isEmpty ||
+        about.isEmpty ||
+        picked.isEmpty ||
+        photoPaths.isEmpty) {
       return false;
     }
+    final List<String> urls = <String>[];
     state = state.copyWith(
-      status: ListingDraftStatus.publishing,
+      status: ListingDraftStatus.uploading,
+      uploaded: 0,
+      total: photoPaths.length,
+      imageUrls: urls,
       clearError: true,
     );
+    final UploadRepository uploads = ref.read(uploadRepositoryProvider);
     try {
-      await ref.read(catalogRepositoryProvider).createListing(
-        NewListing(
-          title: card.title,
-          description: card.description,
-          category: card.category,
-          price: price,
-          stock: stock,
-          imageUrls: card.imageUrls.isEmpty ? state.imageUrls : card.imageUrls,
-          locationLabel: location,
-        ),
-      );
-    } on ApiException catch (error) {
-      if (ref.mounted) {
+      for (int i = 0; i < photoPaths.length; i++) {
+        urls.add(await uploads.uploadImage(photoPaths[i]));
+        if (!ref.mounted) {
+          return false;
+        }
         state = state.copyWith(
-          status: ListingDraftStatus.ready,
-          error: error.userMessage,
+          uploaded: urls.length,
+          imageUrls: List<String>.of(urls),
         );
       }
+    } on ApiException catch (error) {
+      _fail(error.userMessage);
+      return false;
+    } on Exception {
+      _fail('Foto belum bisa diunggah. Coba lagi.');
+      return false;
+    }
+    if (!ref.mounted) {
+      return false;
+    }
+    state = state.copyWith(status: ListingDraftStatus.publishing);
+    try {
+      await ref
+          .read(catalogRepositoryProvider)
+          .createListing(
+            NewListing(
+              title: name,
+              description: about,
+              category: picked,
+              price: price,
+              stock: stock,
+              imageUrls: List<String>.of(urls),
+              locationLabel: location,
+              latitude: latitude,
+              longitude: longitude,
+              includeCoordinates: latitude != null && longitude != null,
+            ),
+          );
+    } on ApiException catch (error) {
+      _fail(error.userMessage);
       return false;
     }
     if (ref.mounted) {

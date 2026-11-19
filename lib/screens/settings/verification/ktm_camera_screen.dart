@@ -6,6 +6,8 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,7 +17,7 @@ import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 
 /// @title KtmCameraScreen
-/// @notice One-shot camera for the verification form and the profile photo.
+/// @notice One-shot camera for the KTM upload and the profile photo.
 class KtmCameraScreen extends ConsumerStatefulWidget {
   /// @notice Creates the camera.
   /// @param title App bar title naming what is being photographed.
@@ -34,7 +36,10 @@ class KtmCameraScreen extends ConsumerStatefulWidget {
   /// @return The file path, or null when the student backs out.
   static Future<String?> push(BuildContext context, {String title = ktmTitle}) {
     return Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(builder: (_) => KtmCameraScreen(title: title)),
+      MaterialPageRoute<String>(
+        settings: const RouteSettings(name: '/ktm-camera'),
+        builder: (_) => KtmCameraScreen(title: title),
+      ),
     );
   }
 
@@ -46,6 +51,7 @@ class _KtmCameraScreenState extends ConsumerState<KtmCameraScreen> {
   late final ListingCamera _camera;
   bool _ready = false;
   bool _busy = false;
+  String? _shot;
 
   @override
   void initState() {
@@ -80,9 +86,17 @@ class _KtmCameraScreenState extends ConsumerState<KtmCameraScreen> {
     setState(() => _busy = true);
     try {
       final String path = await _camera.capture();
-      if (mounted) {
-        Navigator.of(context).pop(path);
+      if (!mounted) {
+        return;
       }
+      if (widget.title != KtmCameraScreen.ktmTitle) {
+        Navigator.of(context).pop(path);
+        return;
+      }
+      setState(() {
+        _shot = path;
+        _busy = false;
+      });
     } on ListingCameraException {
       if (mounted) {
         setState(() => _busy = false);
@@ -92,6 +106,14 @@ class _KtmCameraScreenState extends ConsumerState<KtmCameraScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String? shot = _shot;
+    if (shot != null) {
+      return _KtmPreview(
+        path: shot,
+        onRetake: () => setState(() => _shot = null),
+        onUse: () => Navigator.of(context).pop(shot),
+      );
+    }
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -105,6 +127,108 @@ class _KtmCameraScreenState extends ConsumerState<KtmCameraScreen> {
         backgroundColor: KosplyColors.primary,
         onPressed: _shoot,
         child: const PhosphorGlyph(PhosphorCode.camera, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// @title _KtmPreview
+/// @notice The captured student card, shown flat, before it is kept.
+class _KtmPreview extends StatelessWidget {
+  const _KtmPreview({
+    required this.path,
+    required this.onRetake,
+    required this.onUse,
+  });
+
+  final String path;
+  final VoidCallback onRetake;
+  final VoidCallback onUse;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: KosplyColors.backgroundOf(context),
+      appBar: AppBar(
+        backgroundColor: KosplyColors.backgroundOf(context),
+        elevation: 0,
+        title: const Text('Pratinjau KTM'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: ClipRRect(
+                  key: const Key('ktm-camera-preview'),
+                  borderRadius: BorderRadius.circular(16),
+                  child: AspectRatio(
+                    aspectRatio: 1.586,
+                    child: Image.file(
+                      File(path),
+                      fit: BoxFit.cover,
+                      errorBuilder: (
+                        BuildContext context,
+                        Object error,
+                        StackTrace? stack,
+                      ) => const ColoredBox(color: Color(0xFFE7E5E4)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    key: const Key('ktm-retake'),
+                    onPressed: onRetake,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: KosplyColors.textPrimaryOf(context),
+                      side: BorderSide(color: KosplyColors.outlineOf(context)),
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Foto ulang',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    key: const Key('ktm-use'),
+                    onPressed: onUse,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: KosplyColors.primary,
+                      elevation: 0,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Pakai foto',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

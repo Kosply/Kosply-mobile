@@ -331,9 +331,24 @@ void main() {
     await tester.tap(find.text('Continue'));
     await _settle(tester);
     expect(find.text('Your student number'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).keyboardType,
+      TextInputType.number,
+    );
 
     await _step(tester, '253140701111034');
+    expect(find.text('Where do you study?'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).keyboardType,
+      TextInputType.text,
+    );
+
     await _step(tester, 'Universitas Indonesia 45');
+    expect(find.text("What's your major?"), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).keyboardType,
+      TextInputType.text,
+    );
     await _step(tester, 'S1 Teknik Informatika');
 
     expect(find.byType(InterestScreen), findsOneWidget);

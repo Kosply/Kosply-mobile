@@ -330,12 +330,17 @@ class _SteppedFormState extends State<SteppedForm> {
               )
             else
               AuthTextField(
+                // @dev New field per step. Android keeps the open keyboard's
+                // type when one TextField is only updated, so the number pad
+                // from NIM stayed up on campus and major.
+                key: ValueKey<int>(_step),
                 controller: _controllerFor(_step),
                 hint: step.hint,
                 helper: step.helper,
                 error: _error,
                 obscure: step.obscure,
                 keyboardType: step.keyboardType,
+                autofocus: true,
                 onChanged: (_) => _clearError(),
               ),
           ],

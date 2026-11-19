@@ -111,6 +111,9 @@ class FakeKosplyBackend {
   /// @dev Notification preferences the app pushed.
   final Map<String, bool> notificationPrefs = <String, bool>{};
 
+  /// @dev When set, a photo turn of `/api/ai/chat` waits for this future.
+  Future<void>? listingHold;
+
   /// @dev The card a photo turn of `/api/ai/chat` returns.
   Map<String, dynamic> listingCard = <String, dynamic>{
     'title': 'Kipas angin meja 3 kecepatan',
@@ -129,6 +132,9 @@ class FakeKosplyBackend {
 
   /// @dev When true the stream pauses for Setujui / Tolak instead of finishing.
   bool aiNeedsApproval = false;
+
+  /// @dev When set, the approval previews this seller form instead of a chat line.
+  Map<String, Object>? aiFormFill;
 
   /// @dev Status returned by `GET /api/ai/wait/:id`. `noop` finishes at once.
   String aiWaitStatus = 'noop';
@@ -299,6 +305,24 @@ class FakeKosplyBackend {
         return _send(id, body);
       case ['support', 'help-topics']:
         return _ok(<String, dynamic>{'items': helpTopics});
+      case ['categories']:
+        return _ok(<String, dynamic>{
+          'items': <Map<String, String>>[
+            <String, String>{'id': 'cat-elektronik', 'name': 'Elektronik'},
+            <String, String>{'id': 'cat-buku', 'name': 'Buku'},
+            <String, String>{
+              'id': 'cat-peralatan-kos',
+              'name': 'Peralatan Kos',
+            },
+            <String, String>{'id': 'cat-olahraga', 'name': 'Olahraga'},
+            <String, String>{'id': 'cat-pakaian', 'name': 'Pakaian'},
+            <String, String>{'id': 'cat-furnitur', 'name': 'Furnitur'},
+            <String, String>{'id': 'cat-alat-tulis', 'name': 'Alat Tulis'},
+            <String, String>{'id': 'cat-kecantikan', 'name': 'Kecantikan'},
+            <String, String>{'id': 'cat-hobi', 'name': 'Hobi'},
+            <String, String>{'id': 'cat-lainnya', 'name': 'Lainnya'},
+          ],
+        });
       case ['support', 'tickets'] when method == 'GET':
         return _ok(<String, dynamic>{'items': tickets.values.toList()});
       case ['support', 'tickets'] when method == 'POST':
@@ -323,6 +347,10 @@ class FakeKosplyBackend {
           'messages': aiHistory[id] ?? const [],
         });
       case ['ai', 'chat']:
+        final List<dynamic>? photos = body['imageUrls'] as List<dynamic>?;
+        if (photos != null && photos.isNotEmpty && listingHold != null) {
+          await listingHold;
+        }
         return _aiTurn(body);
       case ['uploads', 'images']:
         _uploads += 1;
@@ -363,7 +391,8 @@ class FakeKosplyBackend {
         return _myVerification();
       case ['reports'] when method == 'POST':
         return _report(body);
-      case ['support', 'tickets', final String id, 'close'] when method == 'POST':
+      case ['support', 'tickets', final String id, 'close']
+          when method == 'POST':
         return _closeTicket(id);
       case ['conversations', final String id, 'stream'] when method == 'GET':
         return _chatStream(id);
@@ -774,8 +803,8 @@ class FakeKosplyBackend {
       'stock': body['stock'] ?? 1,
       'imageUrls': body['imageUrls'] ?? <String>[],
       'category': body['category'],
-      'latitude': null,
-      'longitude': null,
+      'latitude': body['latitude'],
+      'longitude': body['longitude'],
       'locationLabel': body['locationLabel'],
       'status': 'ACTIVE',
     });
@@ -832,6 +861,10 @@ class FakeKosplyBackend {
       'senderId': meId,
       'type': body['type'] ?? 'TEXT',
       'text': body['text'],
+      'imageUrl': body['imageUrl'],
+      'latitude': body['latitude'],
+      'longitude': body['longitude'],
+      'locationLabel': body['locationLabel'],
       'isRead': false,
       'createdAt': now,
     };
@@ -915,9 +948,7 @@ class FakeKosplyBackend {
       }
     }
     product['updatedAt'] = DateTime.now().toUtc().toIso8601String();
-    return _ok(<String, dynamic>{
-      'item': _productJson(product, detail: true),
-    });
+    return _ok(<String, dynamic>{'item': _productJson(product, detail: true)});
   }
 
   http.Response _archive(String id) {
@@ -986,13 +1017,13 @@ class FakeKosplyBackend {
   }
 
   http.Response _notificationList() {
-    final List<Map<String, dynamic>> items = <Map<String, dynamic>>[
-      ...notifications,
-    ]..sort((Map<String, dynamic> a, Map<String, dynamic> b) {
-      return (b['createdAt'] as String? ?? '').compareTo(
-        a['createdAt'] as String? ?? '',
-      );
-    });
+    final List<Map<String, dynamic>> items =
+        <Map<String, dynamic>>[...notifications]
+          ..sort((Map<String, dynamic> a, Map<String, dynamic> b) {
+            return (b['createdAt'] as String? ?? '').compareTo(
+              a['createdAt'] as String? ?? '',
+            );
+          });
     return _ok(<String, dynamic>{'items': items});
   }
 
@@ -1117,11 +1148,7 @@ class FakeKosplyBackend {
     return _error(code == 'AGENT_UNAVAILABLE' ? 503 : 502, code);
   }
 
-  ({
-    Map<String, dynamic> json,
-    String answer,
-    Map<String, dynamic>? listing,
-  })?
+  ({Map<String, dynamic> json, String answer, Map<String, dynamic>? listing})?
   _aiPayload(Map<String, dynamic> body) {
     if (aiErrorCode != null) {
       return null;
@@ -1170,10 +1197,7 @@ class FakeKosplyBackend {
     );
   }
 
-  String _aiFrames({
-    required String answer,
-    Map<String, dynamic>? listing,
-  }) {
+  String _aiFrames({required String answer, Map<String, dynamic>? listing}) {
     final StringBuffer out = StringBuffer();
     void frame(String event, Object data) {
       out
@@ -1195,18 +1219,25 @@ class FakeKosplyBackend {
       frame('interrupt', <String, Object>{
         'pending': <Map<String, Object>>[
           <String, Object>{
-            'pending_tools': <Map<String, String>>[
-              <String, String>{'name': 'send_chat_message'},
+            'pending_tools': <Map<String, Object>>[
+              aiFormFill == null
+                  ? <String, Object>{
+                      'name': 'send_chat_message',
+                      'args': <String, String>{
+                        'text': 'Halo, barangnya masih ada?',
+                      },
+                    }
+                  : <String, Object>{
+                      'name': 'fill_product_form',
+                      'args': aiFormFill!,
+                    },
             ],
           },
         ],
       });
       frame('done', <String, Object>{'ok': true, 'awaitingApproval': true});
     } else {
-      frame('done', <String, Object?>{
-        'ok': true,
-        'listing': ?listing,
-      });
+      frame('done', <String, Object?>{'ok': true, 'listing': ?listing});
     }
     return out.toString();
   }
@@ -1234,9 +1265,7 @@ class FakeKosplyBackend {
     if (payload == null) {
       return _aiFailure();
     }
-    return _sse(
-      _aiFrames(answer: payload.answer, listing: payload.listing),
-    );
+    return _sse(_aiFrames(answer: payload.answer, listing: payload.listing));
   }
 
   http.Response _aiResume(Map<String, dynamic> body) {
@@ -1247,10 +1276,7 @@ class FakeKosplyBackend {
       'role': 'ai',
       'content': answer,
     });
-    return _ok(<String, dynamic>{
-      'conversation_id': id,
-      'answer': answer,
-    });
+    return _ok(<String, dynamic>{'conversation_id': id, 'answer': answer});
   }
 
   http.Response _aiWait(String id) {

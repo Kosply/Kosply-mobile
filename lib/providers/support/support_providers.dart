@@ -10,6 +10,7 @@ import '../../data/support/support_repository.dart';
 import '../../models/chat/conversation.dart';
 import '../../models/support/help_topic.dart';
 import '../../models/support/support_ticket.dart';
+import '../account/session_provider.dart';
 import '../catalog/catalog_providers.dart';
 import '../network/api_provider.dart';
 
@@ -18,6 +19,7 @@ final supportRepositoryProvider = Provider<SupportRepository>(
   (ref) => SupportRepository(
     dao: ref.watch(appDatabaseProvider).supportDao,
     api: ref.watch(apiClientProvider),
+    currentUserId: ref.watch(currentUserIdProvider),
   ),
 );
 
@@ -39,7 +41,8 @@ final ticketMessagesProvider = StreamProvider.family<List<ChatMessage>, String>(
 
 /// @dev Re-reads the public FAQ when the Help desk or ticket form opens.
 final helpTopicsSyncProvider = FutureProvider.autoDispose<void>(
-  (ref) => refreshQuietly(ref.read(supportRepositoryProvider).refreshHelpTopics),
+  (ref) =>
+      refreshQuietly(ref.read(supportRepositoryProvider).refreshHelpTopics),
 );
 
 /// @dev Re-reads the student's tickets when the contact screen opens.

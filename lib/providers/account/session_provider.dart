@@ -79,6 +79,7 @@ class SessionNotifier extends Notifier<AuthSession?> {
   /// @param universitas Campus name.
   /// @param programStudi Study programme.
   /// @param code Mailbox proof collected on the verification step.
+  /// @param nim Student number. Kept on the device for campus verification.
   /// @return The new session.
   Future<AuthSession> register({
     required String email,
@@ -88,6 +89,7 @@ class SessionNotifier extends Notifier<AuthSession?> {
     required String universitas,
     required String programStudi,
     String? code,
+    String nim = '',
   }) async {
     final AuthSession session = await _repo.register(
       email: email,
@@ -98,6 +100,7 @@ class SessionNotifier extends Notifier<AuthSession?> {
       programStudi: programStudi,
       code: code,
     );
+    await _repo.rememberNim(nim);
     _publish(session);
     return session;
   }
@@ -119,12 +122,14 @@ class SessionNotifier extends Notifier<AuthSession?> {
   /// @param username Handle shown on the marketplace.
   /// @param universitas Campus name.
   /// @param programStudi Study programme.
+  /// @param nim Student number. Kept on the device for campus verification.
   /// @return Future completing when the server and the cache agree.
   Future<void> completeRegistration({
     required String name,
     required String username,
     required String universitas,
     required String programStudi,
+    String nim = '',
   }) async {
     final AuthSession? session = state;
     if (session == null) {
@@ -137,6 +142,7 @@ class SessionNotifier extends Notifier<AuthSession?> {
       universitas: universitas,
       programStudi: programStudi,
     );
+    await _repo.rememberNim(nim);
     await ref.read(accountRepositoryProvider).storeMe(user);
     state = await _repo.markOnboarded(
       session,
@@ -156,10 +162,7 @@ class SessionNotifier extends Notifier<AuthSession?> {
   /// @param email Address the code was sent to.
   /// @param code Four digits from the inbox.
   /// @return Future completing when the code is accepted.
-  Future<void> verifyEmailCode({
-    required String email,
-    required String code,
-  }) {
+  Future<void> verifyEmailCode({required String email, required String code}) {
     return _repo.verifyEmailCode(email: email, code: code);
   }
 
@@ -174,10 +177,7 @@ class SessionNotifier extends Notifier<AuthSession?> {
   /// @param email Account email.
   /// @param code Four digits from the inbox.
   /// @return Future completing when the code is accepted.
-  Future<void> checkResetCode({
-    required String email,
-    required String code,
-  }) {
+  Future<void> checkResetCode({required String email, required String code}) {
     return _repo.checkResetCode(email: email, code: code);
   }
 

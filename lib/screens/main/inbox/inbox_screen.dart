@@ -10,7 +10,9 @@ import '../../../models/chat/conversation.dart';
 import '../../../providers/inbox/inbox_providers.dart';
 import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/common/search/searchbar.dart';
 import '../../../widgets/seller/identity/seller_avatar.dart';
 import 'chat_detail_screen.dart';
@@ -101,16 +103,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             ),
             const SizedBox(height: 16),
             if (items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Text(
-                  'Tidak ada percakapan.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: KosplyColors.textSecondaryOf(context),
-                  ),
-                ),
+              const EmptyStateCard(
+                icon: PhosphorCode.chats,
+                message: 'Tidak ada percakapan.',
               )
             else
               for (final Conversation item in items)

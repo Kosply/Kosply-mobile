@@ -1,7 +1,7 @@
 /// @title UI command host
 /// @notice Runs the agent's callbacks against the navigator the user sees.
-/// @dev Place this above the tab body. It closes the AI panel before a
-/// navigation or scroll so the movement is visible.
+/// @dev Place this above the tab body. Navigation leaves the AI panel
+/// where it is; the overlay is mounted above the navigator.
 /// @author Kosply-mobile
 library;
 
@@ -12,12 +12,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/inbox/inbox_repository.dart';
 import '../../models/chat/ai_turn.dart';
-import '../../providers/chat/ai_chat_provider.dart';
 import '../../providers/inbox/inbox_providers.dart';
 import '../../providers/navigation/navigation_provider.dart';
 import '../../screens/main/favorite/favorite_screen.dart';
 import '../../screens/main/inbox/chat_detail_screen.dart';
+import '../../screens/seller/product/add_product_screen.dart';
 import '../../screens/seller/product/product_view_screen.dart';
+import '../../providers/catalog/product_form_fill_provider.dart';
 import '../../screens/support/help/help_desk_screen.dart';
 import 'catalog_filter.dart';
 import 'ui_bridge.dart';
@@ -92,15 +93,12 @@ Future<void> _run(
             clearPrice: !_has(args, const <String>['maxPrice', 'max_price']),
             replace: true,
           );
-      _revealChat(ref);
       return;
     case UiCallbacks.clearFilter:
       ref.read(catalogFilterProvider.notifier).clear();
-      _revealChat(ref);
       return;
     case UiCallbacks.focusInput:
       ref.read(navigationIndexProvider.notifier).setIndex(1);
-      _revealChat(ref);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(catalogSearchFocusProvider).requestFocus();
       });
@@ -113,7 +111,6 @@ Future<void> _run(
       if (productId.isEmpty || !context.mounted) {
         return;
       }
-      _revealChat(ref);
       await ProductViewScreen.push(context, productId);
       return;
     case UiCallbacks.showProduct:
@@ -147,7 +144,6 @@ Future<void> _showElement(
   if (productId.isNotEmpty) {
     ref.read(uiHighlightProvider.notifier).flash(productId);
   }
-  _revealChat(ref);
   ref.read(navigationIndexProvider.notifier).setIndex(0);
   await Future<void>.delayed(const Duration(milliseconds: 50));
   if (!context.mounted) {
@@ -173,7 +169,6 @@ Future<void> _openChat(
     'conversationId',
     'conversation_id',
   ]);
-  _revealChat(ref);
   if (conversationId.isNotEmpty) {
     if (context.mounted) {
       await ChatDetailScreen.push(context, conversationId);
@@ -206,7 +201,6 @@ Future<void> _openChat(
 /// @param name Screen name from the callback.
 /// @return void
 void _openScreen(BuildContext context, WidgetRef ref, String name) {
-  _revealChat(ref);
   switch (name.trim().toLowerCase()) {
     case 'home':
     case 'beranda':
@@ -235,6 +229,13 @@ void _openScreen(BuildContext context, WidgetRef ref, String name) {
     case 'bantuan':
       HelpDeskScreen.push(context);
       break;
+    case 'add-product':
+    case 'tambah':
+    case 'tambah-barang':
+      if (!ref.read(addProductPresenceProvider).mounted) {
+        unawaited(AddProductScreen.push(context));
+      }
+      break;
     default:
       _toast(context, 'Layar "$name" tidak dikenal.');
   }
@@ -260,13 +261,6 @@ bool _scrollTo(WidgetRef ref, String elementId) {
     ),
   );
   return true;
-}
-
-/// @notice Hides the AI panel so the screen underneath can move.
-/// @param ref Riverpod handle.
-/// @return void
-void _revealChat(WidgetRef ref) {
-  ref.read(aiChatProvider.notifier).close();
 }
 
 /// @notice Shows [message] when it is not empty.

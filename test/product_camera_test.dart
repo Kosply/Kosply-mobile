@@ -12,14 +12,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kosply_mobile/core/camera/listing_camera.dart';
 import 'package:kosply_mobile/core/camera/providers/camera_provider.dart';
 import 'package:kosply_mobile/data/uploads/upload_repository.dart';
+import 'package:kosply_mobile/models/catalog/listing_photos.dart';
 import 'package:kosply_mobile/providers/catalog/listing_draft_provider.dart';
 import 'package:kosply_mobile/providers/catalog/listing_photos_provider.dart';
 import 'package:kosply_mobile/providers/network/api_provider.dart';
 import 'package:kosply_mobile/screens/seller/product/add_product_screen.dart';
 import 'package:kosply_mobile/screens/seller/product/product_camera_screen.dart';
 
+import 'helpers/fake_backend.dart';
 import 'helpers/fake_listing_camera.dart';
 import 'helpers/kosply_test_app.dart';
+
+/// @notice Five captured photos, so Pasang barang can upload without the camera.
+class _FullPhotos extends ListingPhotosNotifier {
+  @override
+  ListingPhotos build() {
+    ListingPhotos photos = ListingPhotos.empty();
+    for (int i = 0; i < ListingPhotos.required; i++) {
+      photos = photos.withPhoto('shot-$i.jpg');
+    }
+    return photos;
+  }
+}
 
 /// @notice Product camera behaviour checks.
 /// @return void
@@ -137,22 +151,49 @@ void main() {
     ]);
   });
 
-  testWidgets('Lanjut shows the photos in the form; Ubah foto goes back', (
+  testWidgets('the form opens the camera and Lanjut brings the photos back', (
     WidgetTester tester,
   ) async {
     final FakeListingCamera camera = FakeListingCamera();
-    await pumpCamera(tester, camera);
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
 
+    await pumpKosplyApp(
+      tester,
+      const AddProductScreen(),
+      routes: <String, WidgetBuilder>{
+        ProductCameraScreen.routeName: (_) => const ProductCameraScreen(),
+      },
+      container: await seededContainer(
+        overrides: [
+          listingCameraFactoryProvider.overrideWithValue(() => camera),
+          uploadRepositoryProvider.overrideWith(
+            (Ref ref) => UploadRepository(
+              api: ref.watch(apiClientProvider),
+              readBytes: (String path) async =>
+                  Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Menunggu AI'), findsNothing);
+    expect(find.text('Kami lagi memproses'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('add-product-photo')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProductCameraScreen), findsOneWidget);
     await shoot(tester, 5);
     await tester.tap(find.byKey(const Key('product-camera-next')));
     await tester.pumpAndSettle();
 
     expect(find.byType(AddProductScreen), findsOneWidget);
-    expect(find.text('Tambah barang'), findsOneWidget);
     expect(find.text('Foto (5/5)'), findsOneWidget);
     expect(find.text('Cover'), findsOneWidget);
     expect(find.byKey(const Key('add-product-photo-0')), findsOneWidget);
-    expect(find.byKey(const Key('add-product-photo')), findsNothing);
     expect(camera.isOpen, isFalse);
     expect(tester.takeException(), isNull);
 
@@ -163,6 +204,71 @@ void main() {
     expect(find.text('Foto 5/5'), findsOneWidget);
     expect(camera.isOpen, isTrue);
     expect(camera.opens, 2);
+  });
+
+  testWidgets('pasang barang uploads photos and posts the typed fields', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final FakeKosplyBackend backend = FakeKosplyBackend();
+    await pumpKosplyApp(
+      tester,
+      const AddProductScreen(),
+      backend: backend,
+      overrides: [
+        listingPhotosProvider.overrideWith(_FullPhotos.new),
+        uploadRepositoryProvider.overrideWith(
+          (Ref ref) => UploadRepository(
+            api: ref.watch(apiClientProvider),
+            readBytes: (String path) async =>
+                Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('add-product-title')),
+      'Meja lipat',
+    );
+    await tester.enterText(
+      find.byKey(const Key('add-product-price')),
+      '150000',
+    );
+    await tester.enterText(
+      find.byKey(const Key('add-product-location')),
+      'Gedung A',
+    );
+    await tester.enterText(
+      find.byKey(const Key('add-product-description')),
+      'Kaki masih lurus, minus dus.',
+    );
+    await tester.ensureVisible(find.byKey(const Key('add-product-category')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-product-category')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pakaian').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-product-submit')));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls('POST', '/api/ai/chat'), isEmpty);
+    expect(backend.calls('POST', '/api/uploads/images'), hasLength(5));
+    final Map<String, dynamic> sent = FakeKosplyBackend.bodyOf(
+      backend.calls('POST', '/api/products').single,
+    );
+    expect(sent['title'], 'Meja lipat');
+    expect(sent['description'], 'Kaki masih lurus, minus dus.');
+    expect(sent['category'], 'Pakaian');
+    expect(sent['price'], 150000);
+    expect(sent['stock'], 1);
+    expect(sent['locationLabel'], 'Gedung A');
+    expect(sent['imageUrls'], hasLength(5));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('flash and flip buttons drive the camera', (

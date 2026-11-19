@@ -128,8 +128,16 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
             controller: _description,
             minLines: 3,
             maxLines: 5,
-            decoration: const InputDecoration(
+            cursorColor: KosplyColors.primary,
+            style: TextStyle(
+              fontSize: 16,
+              color: KosplyColors.textPrimaryOf(context),
+            ),
+            decoration: InputDecoration(
               hintText: 'Ceritakan apa yang terjadi',
+              hintStyle: TextStyle(
+                color: KosplyColors.textSecondaryOf(context),
+              ),
             ),
           ),
           const SizedBox(height: 12),

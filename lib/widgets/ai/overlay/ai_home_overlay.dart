@@ -9,10 +9,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/chat/ai_thread.dart';
+import '../../../models/chat/listing_proposal.dart';
 import '../../../providers/chat/ai_chat_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../history/ai_history_tile.dart';
+import '../markdown/markdown_view.dart';
 import '../../common/icons/phosphor_icons.dart';
+import 'ai_overlay_layer.dart';
 
 /// @title AiHomeOverlay
 /// @notice Bottom-right AI composer and the overlay stacked above it.
@@ -50,10 +53,13 @@ class _AiHomeOverlayState extends ConsumerState<AiHomeOverlay> {
   @override
   Widget build(BuildContext context) {
     final AiChatState ai = ref.watch(aiChatProvider);
-    final double inset = MediaQuery.viewInsetsOf(context).bottom;
+    final double keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final double safe = MediaQuery.paddingOf(context).bottom;
+    final double gap = ref.watch(aiOverlayGapProvider);
+    final double inset = keyboard > safe ? keyboard : safe;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + inset),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + inset + gap),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,11 +139,6 @@ class _ComposerBar extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            _ComposerIcon(
-              key: const Key('ai-voice'),
-              codePoint: PhosphorCode.microphone,
-              onPressed: () {},
-            ),
             Expanded(
               child: TextField(
                 key: const Key('ai-input'),
@@ -335,7 +336,7 @@ class _HistoryBody extends ConsumerWidget {
 }
 
 /// @title _ChatBody
-/// @notice Human and AI bubbles with Copy and Ulangi under each.
+/// @notice Human and AI bubbles. Copy and Ulangi sit under a finished AI answer.
 class _ChatBody extends StatelessWidget {
   const _ChatBody({required this.thread});
 
@@ -372,9 +373,11 @@ class _ChatBody extends StatelessWidget {
 }
 
 /// @title _AiBubble
-/// @notice One human or AI bubble plus copy / re-prompt actions.
-/// @dev Thinking sits above the answer. An approval interrupt offers Setujui
-/// and Tolak for the chat action. There is no call button.
+/// @notice One human or AI bubble.
+/// @dev Reasoning sits in its own dropdown. A chat action shows the message
+/// preview, then asks before anything is sent. The answer bubble appears
+/// under that. Copy and Ulangi appear only after the answer is finished.
+/// Setujui sends the preview. Tolak does not. There is no call button.
 class _AiBubble extends ConsumerWidget {
   const _AiBubble({required this.threadId, required this.message});
 
@@ -393,39 +396,69 @@ class _AiBubble extends ConsumerWidget {
         ? Colors.white
         : KosplyColors.textPrimaryOf(context);
 
+    final bool showActions =
+        !mine && !message.pending && message.text.isNotEmpty;
+    final bool thinking = !mine && message.thinking.isNotEmpty;
+    final bool typingOnly = message.text == aiPendingText;
+    final bool showAnswer = mine || (message.text.isNotEmpty && !typingOnly);
+
     return Column(
       crossAxisAlignment: mine
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
-        if (!mine && message.thinking.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 280),
-              child: Text(
-                message.thinking,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.35,
-                  fontStyle: FontStyle.italic,
-                  color: KosplyColors.textSecondaryOf(context),
-                ),
-              ),
+        if (thinking) ...[
+          _ThinkingDropdown(
+            id: message.id,
+            text: message.thinking,
+            live: message.pending && typingOnly,
+          ),
+          if (showAnswer ||
+              message.draft.isNotEmpty ||
+              message.proposal != null)
+            const SizedBox(height: 8),
+        ],
+        if (!mine && message.proposal != null) ...[
+          _ListingPreview(proposal: message.proposal!),
+          if (showAnswer) const SizedBox(height: 8),
+        ],
+        if (!mine && message.draft.isNotEmpty) ...[
+          _DraftPreview(text: message.draft),
+          if (showAnswer) const SizedBox(height: 8),
+        ],
+        if (showAnswer)
+          Container(
+            constraints: const BoxConstraints(maxWidth: 280),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: mine
+                ? Text(
+                    message.text,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.35,
+                      color: textColor,
+                    ),
+                  )
+                : MarkdownView(data: message.text, color: textColor),
+          ),
+        if (!mine &&
+            message.pending &&
+            !message.needsApproval &&
+            message.text != aiPendingText) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Mengirim…',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: KosplyColors.textSecondaryOf(context),
             ),
           ),
-        Container(
-          constraints: const BoxConstraints(maxWidth: 280),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: bubbleColor,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            message.text,
-            style: TextStyle(fontSize: 14, height: 1.35, color: textColor),
-          ),
-        ),
+        ],
         if (message.needsApproval) ...[
           const SizedBox(height: 6),
           Row(
@@ -433,45 +466,301 @@ class _AiBubble extends ConsumerWidget {
             children: [
               TextButton(
                 key: const Key('ai-approve'),
-                onPressed: () => ref.read(aiChatProvider.notifier).decide(
-                  threadId: threadId,
-                  bubbleId: message.id,
-                  approve: true,
-                ),
+                onPressed: () => ref
+                    .read(aiChatProvider.notifier)
+                    .decide(
+                      threadId: threadId,
+                      bubbleId: message.id,
+                      approve: true,
+                    ),
                 child: const Text('Setujui'),
               ),
               TextButton(
                 key: const Key('ai-reject'),
-                onPressed: () => ref.read(aiChatProvider.notifier).decide(
-                  threadId: threadId,
-                  bubbleId: message.id,
-                  approve: false,
-                ),
+                onPressed: () => ref
+                    .read(aiChatProvider.notifier)
+                    .decide(
+                      threadId: threadId,
+                      bubbleId: message.id,
+                      approve: false,
+                    ),
                 child: const Text('Tolak'),
               ),
             ],
           ),
         ],
-        const SizedBox(height: 6),
-        Row(
-          mainAxisSize: MainAxisSize.min,
+        if (showActions) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _BubbleAction(
+                key: Key('ai-copy-${message.id}'),
+                icon: PhosphorCode.copy,
+                label: 'Copy',
+                onTap: () =>
+                    Clipboard.setData(ClipboardData(text: message.text)),
+              ),
+              const SizedBox(width: 12),
+              _BubbleAction(
+                key: Key('ai-repeat-${message.id}'),
+                icon: PhosphorCode.arrowClockwise,
+                label: 'Ulangi',
+                onTap: () => ref.read(aiChatProvider.notifier).repeat(message),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// @title _ListingPreview
+/// @notice The seller fields Setujui will write. Nothing is published here.
+class _ListingPreview extends StatelessWidget {
+  const _ListingPreview({required this.proposal});
+
+  final ListingProposal proposal;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 280,
+      child: DecoratedBox(
+        key: const Key('ai-listing-preview'),
+        decoration: BoxDecoration(
+          color: KosplyColors.surfaceOf(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: KosplyColors.outlineOf(context)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Preview barang',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: KosplyColors.textSecondaryOf(context),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _PreviewLine(label: 'Nama', value: proposal.title),
+              _PreviewLine(label: 'Harga', value: _rupiahLabel(proposal.price)),
+              _PreviewLine(label: 'Kategori', value: proposal.category),
+              _PreviewLine(label: 'Deskripsi', value: proposal.description),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// @title _PreviewLine
+/// @notice One labelled line inside the form preview.
+class _PreviewLine extends StatelessWidget {
+  const _PreviewLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: KosplyColors.textSecondaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: label == 'Deskripsi' ? 6 : 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.35,
+              color: KosplyColors.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// @notice Groups an integer rupiah amount with dots.
+/// @param price Whole rupiah.
+/// @return `Rp85.000` for 85000.
+String _rupiahLabel(int price) {
+  final String digits = price.toString();
+  final StringBuffer out = StringBuffer('Rp');
+  for (int i = 0; i < digits.length; i++) {
+    final int remaining = digits.length - i;
+    if (i > 0 && remaining % 3 == 0) {
+      out.write('.');
+    }
+    out.write(digits[i]);
+  }
+  return out.toString();
+}
+
+/// @title _DraftPreview
+/// @notice The exact chat line that Setujui will send.
+class _DraftPreview extends StatelessWidget {
+  const _DraftPreview({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 280,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: KosplyColors.surfaceOf(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: KosplyColors.outlineOf(context)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Preview pesan',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: KosplyColors.textSecondaryOf(context),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                text,
+                key: const Key('ai-draft'),
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.35,
+                  color: KosplyColors.textPrimaryOf(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// @title _ThinkingDropdown
+/// @notice Card that holds the model's reasoning, apart from the answer bubble.
+/// @dev While the answer has not started, the card stays open. It closes once
+/// the answer arrives. A tap opens or closes it after that.
+class _ThinkingDropdown extends StatefulWidget {
+  const _ThinkingDropdown({
+    required this.id,
+    required this.text,
+    required this.live,
+  });
+
+  final String id;
+  final String text;
+
+  /// @dev True while reasoning is still streaming and the answer is not here.
+  final bool live;
+
+  @override
+  State<_ThinkingDropdown> createState() => _ThinkingDropdownState();
+}
+
+class _ThinkingDropdownState extends State<_ThinkingDropdown> {
+  bool? _userOpen;
+
+  bool get _open => _userOpen ?? widget.live;
+
+  @override
+  void didUpdateWidget(covariant _ThinkingDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.live && !widget.live) {
+      _userOpen = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool open = _open;
+    final Color color = KosplyColors.textSecondaryOf(context);
+    final Color onShell = KosplyColors.textPrimaryOf(context);
+    return SizedBox(
+      width: 280,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: KosplyColors.surfaceOf(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: KosplyColors.outlineOf(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _BubbleAction(
-              key: Key('ai-copy-${message.id}'),
-              icon: PhosphorCode.copy,
-              label: 'Copy',
-              onTap: () => Clipboard.setData(ClipboardData(text: message.text)),
+            InkWell(
+              key: Key('ai-thinking-${widget.id}'),
+              onTap: () => setState(() => _userOpen = !open),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    PhosphorGlyph(
+                      open ? PhosphorCode.caretUp : PhosphorCode.caretDown,
+                      size: 14,
+                      color: color,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Proses berpikir',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: onShell,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(width: 12),
-            _BubbleAction(
-              key: Key('ai-repeat-${message.id}'),
-              icon: PhosphorCode.arrowClockwise,
-              label: 'Ulangi',
-              onTap: () => ref.read(aiChatProvider.notifier).repeat(message),
-            ),
+            if (open) ...[
+              Divider(height: 1, color: KosplyColors.outlineOf(context)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Text(
+                  widget.text,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    fontStyle: FontStyle.italic,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
-      ],
+      ),
     );
   }
 }

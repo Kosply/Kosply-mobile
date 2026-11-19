@@ -1,9 +1,10 @@
 /// @title ChatComposer
 /// @notice Bottom input shared by COD chat and support tickets.
-/// @dev The voice icon turns into send once there is text; the keyboard's
-/// send action does the same. While [onSend] runs the field stays disabled,
-/// so a double tap cannot post the bubble twice, and the text is only cleared
-/// after the backend accepted it.
+/// @dev The keyboard's send action posts the text. While a send runs the
+/// field stays disabled, so a double tap cannot post the bubble twice, and
+/// the text is only cleared after the backend accepted it. The plus control
+/// offers location and photo only when the screen supplies those callbacks,
+/// and both send immediately with nothing left in the field.
 /// @author Kosply-mobile
 library;
 
@@ -13,20 +14,30 @@ import '../../../theme/colors/kosply_colors.dart';
 import '../icons/phosphor_icons.dart';
 
 /// @title ChatComposer
-/// @notice Attach, text, and voice/send controls.
+/// @notice Attach, text, and send controls.
 class ChatComposer extends StatefulWidget {
   /// @notice Creates the composer.
   /// @param onSend Sends the text; throws to keep it in the field.
+  /// @param onSendLocation Sends the current pin immediately.
+  /// @param onSendPhoto Opens the camera and sends the shot immediately.
   /// @param hint Placeholder text.
   /// @return A new {ChatComposer} instance.
   const ChatComposer({
     required this.onSend,
+    this.onSendLocation,
+    this.onSendPhoto,
     this.hint = 'Tulis pesan...',
     super.key,
   });
 
   /// @dev Sends the text; throws to keep it in the field.
   final Future<void> Function(String text) onSend;
+
+  /// @dev Sends the current pin immediately. Null hides that choice.
+  final Future<void> Function()? onSendLocation;
+
+  /// @dev Sends one photo immediately. Null hides that choice.
+  final Future<void> Function()? onSendPhoto;
 
   /// @dev Placeholder text.
   final String hint;
@@ -69,6 +80,59 @@ class _ChatComposerState extends State<ChatComposer> {
     }
   }
 
+  /// @notice Opens location and photo. The chosen one sends at once.
+  /// @return void
+  Future<void> _attach() async {
+    if (_sending) {
+      return;
+    }
+    if (widget.onSendLocation == null && widget.onSendPhoto == null) {
+      return;
+    }
+    final String? picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: KosplyColors.surfaceOf(context),
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.onSendLocation != null)
+                ListTile(
+                  key: const Key('chat-attach-location'),
+                  title: const Text('Kirim lokasi saat ini'),
+                  onTap: () => Navigator.of(sheetContext).pop('location'),
+                ),
+              if (widget.onSendPhoto != null)
+                ListTile(
+                  key: const Key('chat-attach-photo'),
+                  title: const Text('Kirim foto'),
+                  onTap: () => Navigator.of(sheetContext).pop('photo'),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      if (picked == 'location') {
+        await widget.onSendLocation?.call();
+      } else if (picked == 'photo') {
+        await widget.onSendPhoto?.call();
+      }
+    } catch (_) {
+      // The screen already explained the failure.
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Color surface = KosplyColors.surfaceOf(context);
@@ -88,7 +152,7 @@ class _ChatComposerState extends State<ChatComposer> {
                 key: const Key('chat-plus'),
                 codePoint: PhosphorCode.plus,
                 color: iconColor,
-                onPressed: () {},
+                onPressed: _attach,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -136,13 +200,6 @@ class _ChatComposerState extends State<ChatComposer> {
                   codePoint: PhosphorCode.paperPlaneTilt,
                   color: KosplyColors.primary,
                   onPressed: _send,
-                )
-              else
-                _ComposerIcon(
-                  key: const Key('chat-voice'),
-                  codePoint: PhosphorCode.microphone,
-                  color: iconColor,
-                  onPressed: () {},
                 ),
             ],
           ),
@@ -153,7 +210,7 @@ class _ChatComposerState extends State<ChatComposer> {
 }
 
 /// @title _ComposerIcon
-/// @notice Circular plus, voice, or send control.
+/// @notice Circular plus or send control.
 class _ComposerIcon extends StatelessWidget {
   const _ComposerIcon({
     required this.codePoint,

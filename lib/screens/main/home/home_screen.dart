@@ -6,6 +6,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/location/nearby.dart';
 import '../../../core/ui_bridge/catalog_filter.dart';
 import '../../../core/ui_bridge/ui_bridge.dart';
 import '../../../core/ui_bridge/ui_bridge_scope.dart';
@@ -13,11 +14,15 @@ import '../../../core/ui_bridge/ui_ids.dart';
 import '../../../models/chat/ai_thread.dart';
 import '../../../models/catalog/product.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/location/location_label_provider.dart';
 import '../../../providers/chat/ai_chat_provider.dart';
 import 'see_all_screen.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/ai/history/ai_history_tile.dart';
 import '../../../widgets/product/grid/product_grid.dart';
+import '../../../widgets/common/banner/home_banner.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/common/search/catalog_search_field.dart';
 import '../../../widgets/common/headings/section_heading.dart';
 
@@ -70,10 +75,12 @@ class HomeScreen extends ConsumerWidget {
     final AiChatState ai = ref.watch(aiChatProvider);
     final CatalogFilter filter = ref.watch(catalogFilterProvider);
     final List<AiThread> history = ai.threads;
-    final List<Product> items =
-        (ref.watch(catalogProductsProvider).value ?? const <Product>[])
-            .where(filter.allows)
-            .toList();
+    final List<Product> items = nearestFirst(
+      (ref.watch(catalogProductsProvider).value ?? const <Product>[])
+          .where(filter.allows)
+          .toList(),
+      fix: ref.watch(deviceFixProvider),
+    );
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -86,30 +93,40 @@ class HomeScreen extends ConsumerWidget {
           padding: EdgeInsets.fromLTRB(16, 12, 16, _bottomPad(ai)),
           children: [
             const CatalogSearchField(),
+            const SizedBox(height: 16),
+            const HomeBanner(),
             const SizedBox(height: 24),
-            SectionHeading(
-              'Rekomendasi',
-              actionLabel: 'Lihat semua',
-              onTap: () => _openSeeAll(context, 'Rekomendasi', items),
-            ),
-            const SizedBox(height: 12),
-            ProductGrid(items: items.take(4).toList(), anchor: true),
-            const SizedBox(height: 24),
-            SectionHeading(
-              'Terdekat',
-              actionLabel: 'Lihat semua',
-              onTap: () => _openSeeAll(context, 'Terdekat', items),
-            ),
-            const SizedBox(height: 12),
-            ProductGrid(items: items.skip(4).take(4).toList(), anchor: true),
-            const SizedBox(height: 24),
-            SectionHeading(
-              'Semua Produk',
-              actionLabel: 'Lihat semua',
-              onTap: () => _openSeeAll(context, 'Semua Produk', items),
-            ),
-            const SizedBox(height: 12),
-            ProductGrid(items: items),
+            if (items.isEmpty)
+              const EmptyStateCard(
+                key: Key('home-empty'),
+                icon: PhosphorCode.package,
+                message: 'Belum ada barang di sekitar kamu.',
+              )
+            else ...[
+              SectionHeading(
+                'Rekomendasi',
+                actionLabel: 'Lihat semua',
+                onTap: () => _openSeeAll(context, 'Rekomendasi', items),
+              ),
+              const SizedBox(height: 12),
+              ProductGrid(items: items.take(4).toList(), anchor: true),
+              const SizedBox(height: 24),
+              SectionHeading(
+                'Terdekat',
+                actionLabel: 'Lihat semua',
+                onTap: () => _openSeeAll(context, 'Terdekat', items),
+              ),
+              const SizedBox(height: 12),
+              ProductGrid(items: items.skip(4).take(4).toList(), anchor: true),
+              const SizedBox(height: 24),
+              SectionHeading(
+                'Semua Produk',
+                actionLabel: 'Lihat semua',
+                onTap: () => _openSeeAll(context, 'Semua Produk', items),
+              ),
+              const SizedBox(height: 12),
+              ProductGrid(items: items),
+            ],
             const SizedBox(height: 24),
             const SectionHeading('Chat history'),
             const SizedBox(height: 8),

@@ -18,7 +18,9 @@ import '../../../providers/catalog/catalog_providers.dart';
 import '../../../providers/inbox/inbox_providers.dart';
 import '../../reports/report_sheet.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
 import '../../../widgets/seller/chat/chat_seller_bar.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
@@ -116,9 +118,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
           .openForSeller(widget.sellerId);
     } on ApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
       }
       return;
     }
@@ -142,81 +143,75 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     }
     final List<Product> visible = _filtered(listed);
 
-    return Scaffold(
-      backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: AppBar(
+    return RouteGapHost(
+      gap: kBottomBarGap,
+      child: Scaffold(
         backgroundColor: KosplyColors.backgroundOf(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: PhosphorGlyph(
-            PhosphorCode.arrowLeft,
-            size: 20,
-            color: KosplyColors.textPrimaryOf(context),
-          ),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        actions: [
-          if (seller.id != ref.watch(currentUserIdProvider))
-            IconButton(
-              key: const Key('seller-report'),
-              icon: PhosphorGlyph(
-                PhosphorCode.megaphone,
-                size: 20,
-                color: KosplyColors.textPrimaryOf(context),
-              ),
-              onPressed: () => showReportSheet(context, userId: seller.id),
+        appBar: AppBar(
+          backgroundColor: KosplyColors.backgroundOf(context),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: PhosphorGlyph(
+              PhosphorCode.arrowLeft,
+              size: 20,
+              color: KosplyColors.textPrimaryOf(context),
             ),
-        ],
-        title: Text(
-          seller.name,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: KosplyColors.textPrimaryOf(context),
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          SellerIdentity(seller: seller),
-          const SizedBox(height: 12),
-          Text(
-            seller.bio,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.5,
-              color: KosplyColors.textSecondaryOf(context),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const SectionHeading('Barang jualan'),
-          const SizedBox(height: 12),
-          FilterChipBar(
-            labels: _chipLabels(listed),
-            selected: _filter,
-            onSelected: (String label) => setState(() => _filter = label),
-          ),
-          const SizedBox(height: 16),
-          if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                'Belum ada barang di filter ini.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: KosplyColors.textSecondaryOf(context),
+          actions: [
+            if (seller.id != ref.watch(currentUserIdProvider))
+              IconButton(
+                key: const Key('seller-report'),
+                icon: PhosphorGlyph(
+                  PhosphorCode.megaphone,
+                  size: 20,
+                  color: KosplyColors.textPrimaryOf(context),
                 ),
+                onPressed: () => showReportSheet(context, userId: seller.id),
               ),
-            )
-          else
-            ProductGrid(items: visible),
-        ],
-      ),
-      bottomNavigationBar: ChatSellerBar(
-        onPressed: _openChat,
+          ],
+          title: Text(
+            seller.name,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: KosplyColors.textPrimaryOf(context),
+            ),
+          ),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            SellerIdentity(seller: seller),
+            const SizedBox(height: 12),
+            Text(
+              seller.bio,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: KosplyColors.textSecondaryOf(context),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const SectionHeading('Barang jualan'),
+            const SizedBox(height: 12),
+            FilterChipBar(
+              labels: _chipLabels(listed),
+              selected: _filter,
+              onSelected: (String label) => setState(() => _filter = label),
+            ),
+            const SizedBox(height: 16),
+            if (visible.isEmpty)
+              const EmptyStateCard(
+                icon: PhosphorCode.package,
+                message: 'Belum ada barang di filter ini.',
+              )
+            else
+              ProductGrid(items: visible),
+          ],
+        ),
+        bottomNavigationBar: ChatSellerBar(onPressed: _openChat),
       ),
     );
   }

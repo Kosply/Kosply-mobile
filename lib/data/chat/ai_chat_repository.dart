@@ -23,6 +23,7 @@ import '../../core/network/json_read.dart';
 import '../../core/network/sse.dart';
 import '../../models/catalog/listing_card.dart';
 import '../../models/chat/ai_turn.dart';
+import '../../models/chat/listing_proposal.dart';
 import '../../models/chat/ai_thread.dart';
 import '../shared/stream_utils.dart';
 import '../shared/time_labels.dart';
@@ -111,9 +112,15 @@ class AiChatRepository {
     );
   }
 
-  /// @dev Shown when a sensitive tool pauses before any answer text arrives.
+  /// @dev Shown when a sensitive tool pauses and the draft text is missing.
   static const String approvalText =
       'AI butuh persetujuanmu sebelum melanjutkan.';
+
+  /// @dev Asked under the message preview, before anything is sent.
+  static const String approvalAsk = 'Kirim pesan ini?';
+
+  /// @dev Asked under the seller-form preview, before the fields are written.
+  static const String approvalFill = 'Isi form barang ini?';
 
   /// @notice Sends one chatbot turn over SSE, including the screen the user sees.
   /// @dev Events: `thinking`, `token`, `callback`, `interrupt`, `done`.
@@ -131,12 +138,15 @@ class AiChatRepository {
     required String conversationId,
     required String message,
     Map<String, Object?>? uiState,
+    List<String> imageUrls = const <String>[],
     void Function(String thinking, String answer)? onPartial,
   }) {
     final StringBuffer thinking = StringBuffer();
     final StringBuffer answer = StringBuffer();
     final List<UiCallback> callbacks = <UiCallback>[];
     bool needsApproval = false;
+    String draft = '';
+    ListingProposal? proposal;
     final Completer<AiTurn> result = Completer<AiTurn>();
     late final StreamSubscription<SseEvent> subscription;
 
@@ -151,7 +161,14 @@ class AiChatRepository {
         return;
       }
       result.complete(
-        _turn(thinking.toString(), answer.toString(), callbacks, needsApproval),
+        _turn(
+          thinking.toString(),
+          answer.toString(),
+          callbacks,
+          needsApproval,
+          draft,
+          proposal,
+        ),
       );
       closeStream();
     }
@@ -172,6 +189,8 @@ class AiChatRepository {
             'conversation_id': conversationId,
             'message': message,
             'ui_state': ?uiState,
+            if (imageUrls.isNotEmpty) 'imageUrls': imageUrls,
+            if (imageUrls.isNotEmpty) 'see_photos': true,
           },
           timeout: ApiConfig.aiTimeout,
         )
@@ -194,6 +213,11 @@ class AiChatRepository {
                 }
               case 'interrupt':
                 needsApproval = true;
+                final String nextDraft = _draftOf(event.json);
+                if (nextDraft.isNotEmpty) {
+                  draft = nextDraft;
+                }
+                proposal = _proposalOf(event.json) ?? proposal;
               case 'error':
                 fail(
                   ApiException(
@@ -258,26 +282,127 @@ class AiChatRepository {
     String answer,
     List<UiCallback> callbacks,
     bool needsApproval,
+    String draft,
+    ListingProposal? proposal,
   ) {
-    final String text = answer.isEmpty && needsApproval ? approvalText : answer;
+    String preview = draft.trim();
+    String text = answer;
+    if (needsApproval) {
+      if (proposal != null) {
+        text = approvalFill;
+        preview = '';
+      } else {
+        if (preview.isEmpty) {
+          preview = answer.trim();
+        }
+        text = preview.isEmpty ? approvalText : approvalAsk;
+      }
+    }
     return AiTurn(
       answer: text,
       thinking: thinking,
       callbacks: callbacks,
       needsApproval: needsApproval,
+      draft: needsApproval ? preview : '',
+      proposal: needsApproval ? proposal : null,
     );
   }
 
+  /// @notice Reads the seller form a pending tool would write.
+  /// @param json Interrupt event body.
+  /// @return The four fields, or null when this pause is not a form fill.
+  ListingProposal? _proposalOf(Map<String, dynamic> json) {
+    for (final Map<String, dynamic> pause in json.objects('pending')) {
+      for (final Map<String, dynamic> tool in pause.objects('pending_tools')) {
+        if (tool.str('name') != 'fill_product_form') {
+          continue;
+        }
+        final Map<String, dynamic> args =
+            tool.object('args') ?? const <String, dynamic>{};
+        final String title = args.str('title').trim();
+        final String description = args.str('description').trim();
+        final String category = args.str('category').trim();
+        final int price = _rupiah(args['price']);
+        if (title.isEmpty ||
+            description.isEmpty ||
+            category.isEmpty ||
+            price < 1 ||
+            price > 2000000000 ||
+            title.length > 191) {
+          continue;
+        }
+        return ListingProposal(
+          title: title,
+          price: price,
+          description: description,
+          category: category,
+        );
+      }
+    }
+    return null;
+  }
+
+  /// @notice Integer rupiah from a tool argument.
+  /// @param value Model argument. Digits inside a string count too.
+  /// @return The amount, or 0 when it is not a whole rupiah price.
+  int _rupiah(Object? value) {
+    if (value is bool) {
+      return 0;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      if (value != value.roundToDouble()) {
+        return 0;
+      }
+      return value.toInt();
+    }
+    final String digits = (value?.toString() ?? '').replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+    return int.tryParse(digits) ?? 0;
+  }
+
+  /// @notice Reads the chat line a pending tool would send.
+  /// @param json Interrupt event body.
+  /// @return The message text, or empty when the tool named none.
+  String _draftOf(Map<String, dynamic> json) {
+    for (final Map<String, dynamic> pause in json.objects('pending')) {
+      for (final Map<String, dynamic> tool in pause.objects('pending_tools')) {
+        final Map<String, dynamic> args =
+            tool.object('args') ?? const <String, dynamic>{};
+        final String message = args.str('message');
+        if (message.isNotEmpty) {
+          return message;
+        }
+        final String text = args.str('text');
+        if (text.isNotEmpty) {
+          return text;
+        }
+      }
+    }
+    return '';
+  }
+
   /// @notice Asks the agent to fill a product card from side photos.
-  /// @dev A `photos` turn: the model writes title, description and category;
-  /// price and stock stay null for the seller to type.
+  /// @dev Kept for the backend listing turn. The add-product form does not
+  /// call this. A `photos` turn. [message] carries the seller's name and
+  /// condition. The model writes the description and a category; price and
+  /// stock stay null. The published title is the seller's name, not the model's.
   /// @param imageUrls Uploaded photo URLs, cover first.
+  /// @param message `Nama barang` and `Kondisi barang` lines.
   /// @return The card.
-  Future<ListingCard> fillListing(List<String> imageUrls) async {
+  Future<ListingCard> fillListing(
+    List<String> imageUrls, {
+    required String message,
+  }) async {
     final Map<String, dynamic> json = await api.post(
       '/api/ai/chat',
       body: <String, Object?>{
         'conversation_id': newConversationId(),
+        'message': message,
         'imageUrls': imageUrls,
       },
       timeout: ApiConfig.aiTimeout,
@@ -302,8 +427,7 @@ class AiChatRepository {
   /// @notice Reads every cached thread once.
   /// @return Threads, newest activity first.
   Future<List<AiThread>> threadsOnce() async {
-    final List<AiConversationRow> conversations = await dao
-        .conversationsOnce();
+    final List<AiConversationRow> conversations = await dao.conversationsOnce();
     final List<AiMessageRow> messages = await dao.allMessagesOnce();
     return _toThreads(conversations, messages);
   }

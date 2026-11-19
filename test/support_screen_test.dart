@@ -149,7 +149,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('chat-plus')), findsOneWidget);
-    expect(find.byKey(const Key('chat-voice')), findsOneWidget);
+    expect(find.byKey(const Key('chat-voice')), findsNothing);
     expect(find.byKey(const Key('chat-input')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -15,11 +15,10 @@ import '../../../models/catalog/listing_photos.dart';
 import '../../../providers/catalog/listing_photos_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
-import 'add_product_screen.dart';
 
 /// @title ProductCameraScreen
 /// @notice Live camera on top, captured photo slots below. Opened from the
-/// Jual plus button; Lanjut unlocks once every slot is filled.
+/// add-product form; Lanjut returns there once every slot is filled.
 /// @dev Photos only come from fresh shots, never the gallery.
 class ProductCameraScreen extends ConsumerStatefulWidget {
   /// @notice Creates the product camera screen.
@@ -179,21 +178,15 @@ class _ProductCameraScreenState extends ConsumerState<ProductCameraScreen>
     }
   }
 
-  /// @notice Opens the form with the camera released, restarting it if the
-  /// seller comes back to retake photos.
-  /// @dev A published listing closes the camera too, back to the Jual tab.
-  /// @return Future completing once the form is popped.
-  Future<void> _next() async {
+  /// @notice Returns to the add-product form with the camera released.
+  /// @dev The form stays underneath and reads the captured paths.
+  /// @return void
+  void _next() {
     _close();
-    final bool? published = await AddProductScreen.push(context);
     if (!mounted) {
       return;
     }
-    if (published == true) {
-      Navigator.of(context).pop();
-      return;
-    }
-    await _open();
+    Navigator.of(context).pop();
   }
 
   /// @notice Builds the split camera and photo strip.

@@ -59,10 +59,7 @@ void main() {
 
     expect(find.byType(SellerIdentity), findsOneWidget);
     expect(find.text('Kamu'), findsOneWidget);
-    expect(
-      find.textContaining('Lagi beres-beres kos'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Lagi beres-beres kos'), findsOneWidget);
     expect(find.text('Cari barang jualan...'), findsOneWidget);
     expect(find.byKey(const Key('jual-analytic')), findsNothing);
     expect(find.byKey(const Key('jual-add')), findsOneWidget);
@@ -98,10 +95,12 @@ void main() {
 
     expect(find.byType(AnalyticScreen), findsOneWidget);
     expect(find.text('Views'), findsOneWidget);
-    expect(find.text('Trading product kamu'), findsOneWidget);
+    expect(find.text('Semua product kamu'), findsOneWidget);
+    expect(find.byKey(const Key('analytic-empty-shelf')), findsOneWidget);
+    expect(find.text('Trading product kamu'), findsNothing);
   });
 
-  testWidgets('plus button opens the product camera and back returns', (
+  testWidgets('plus button opens the product form and back returns', (
     WidgetTester tester,
   ) async {
     await pumpJual(tester);
@@ -109,15 +108,15 @@ void main() {
     await tester.tap(find.byKey(const Key('jual-add')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ProductCameraScreen), findsOneWidget);
-    expect(find.text('Foto 0/5'), findsOneWidget);
-    expect(find.text('Lanjut'), findsOneWidget);
+    expect(find.byType(AddProductScreen), findsOneWidget);
+    expect(find.text('Tambah barang'), findsOneWidget);
+    expect(find.byType(ProductCameraScreen), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const Key('product-camera-back')));
+    await tester.tap(find.byKey(const Key('add-product-back')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ProductCameraScreen), findsNothing);
+    expect(find.byType(AddProductScreen), findsNothing);
     expect(find.byType(JualScreen), findsOneWidget);
   });
 }

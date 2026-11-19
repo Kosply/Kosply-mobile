@@ -13,15 +13,17 @@ import '../../../models/catalog/seller.dart';
 import '../../../providers/account/account_mode_provider.dart';
 import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/catalog/seller_analytics_provider.dart';
 import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
 import '../../../widgets/common/search/searchbar.dart';
 import '../../../widgets/seller/identity/seller_identity.dart';
 import '../../../widgets/common/buttons/tinted_icon_button.dart';
-import '../../seller/product/product_camera_screen.dart';
+import '../../seller/product/add_product_screen.dart';
 import '../../seller/analytic/analytic_screen.dart';
 
 /// @title JualScreen
@@ -31,14 +33,17 @@ class JualScreen extends ConsumerStatefulWidget {
   /// @return A new {JualScreen} instance.
   const JualScreen({super.key});
 
-  /// @dev Filter shown first, listing every item the seller has.
+  /// @dev Tab shown first, listing every item the seller has.
   static const String filterAll = 'Semua';
 
-  /// @dev Newest-first filter.
-  static const String filterNewest = 'Terbaru';
+  /// @dev Newest listings on the shelf.
+  static const String filterTrading = 'Trading';
 
-  /// @dev Lowest-price filter.
-  static const String filterCheapest = 'Termurah';
+  /// @dev Listings ranked by clicks and impressions.
+  static const String filterPopular = 'Paling diminati';
+
+  /// @dev Listings with the least stock first.
+  static const String filterLow = 'Hampir habis';
 
   /// @notice Creates the mutable search and filter state.
   /// @return The {_JualScreenState} instance.
@@ -58,8 +63,9 @@ class _JualScreenState extends ConsumerState<JualScreen> {
   List<String> _chipLabels(List<Product> items) {
     final List<String> labels = <String>[
       JualScreen.filterAll,
-      JualScreen.filterNewest,
-      JualScreen.filterCheapest,
+      JualScreen.filterTrading,
+      JualScreen.filterPopular,
+      JualScreen.filterLow,
     ];
     for (final Product item in items) {
       if (!labels.contains(item.category)) {
@@ -69,10 +75,11 @@ class _JualScreenState extends ConsumerState<JualScreen> {
     return labels;
   }
 
-  /// @notice Applies search and the selected chip to [items].
+  /// @notice Applies search and the selected tab to [items].
   /// @param items The seller's full catalogue.
+  /// @param interest Clicks plus impressions per product id.
   /// @return The filtered, possibly reordered list.
-  List<Product> _visible(List<Product> items) {
+  List<Product> _visible(List<Product> items, Map<String, int> interest) {
     final String needle = _query.trim().toLowerCase();
     List<Product> result = items;
     if (needle.isNotEmpty) {
@@ -80,18 +87,27 @@ class _JualScreenState extends ConsumerState<JualScreen> {
           .where((Product item) => item.title.toLowerCase().contains(needle))
           .toList();
     }
-    if (_filter == JualScreen.filterNewest) {
-      return result.reversed.toList();
+    const Set<String> tabs = <String>{
+      JualScreen.filterAll,
+      JualScreen.filterTrading,
+      JualScreen.filterPopular,
+      JualScreen.filterLow,
+    };
+    if (!tabs.contains(_filter)) {
+      return result.where((Product item) => item.category == _filter).toList();
     }
-    if (_filter == JualScreen.filterCheapest) {
+    if (_filter == JualScreen.filterPopular) {
       final List<Product> sorted = List<Product>.from(result);
       sorted.sort(
-        (Product a, Product b) => a.priceValue.compareTo(b.priceValue),
+        (Product a, Product b) =>
+            (interest[b.id] ?? 0).compareTo(interest[a.id] ?? 0),
       );
       return sorted;
     }
-    if (_filter != JualScreen.filterAll) {
-      return result.where((Product item) => item.category == _filter).toList();
+    if (_filter == JualScreen.filterLow) {
+      final List<Product> sorted = List<Product>.from(result);
+      sorted.sort((Product a, Product b) => a.quantity.compareTo(b.quantity));
+      return sorted;
     }
     return result;
   }
@@ -112,7 +128,10 @@ class _JualScreenState extends ConsumerState<JualScreen> {
     final Seller? seller = ref.watch(sellerProvider(sellerId)).value;
     final List<Product> listed =
         ref.watch(sellerProductsProvider(sellerId)).value ?? const <Product>[];
-    final List<Product> visible = _visible(listed);
+    final Map<String, int> interest =
+        ref.watch(sellerAnalyticsProvider).value?.interestByProduct ??
+        const <String, int>{};
+    final List<Product> visible = _visible(listed, interest);
     final bool isSeller = ref.watch(accountModeProvider) == AccountMode.seller;
 
     if (seller == null) {
@@ -161,7 +180,7 @@ class _JualScreenState extends ConsumerState<JualScreen> {
                 TintedIconButton(
                   key: const Key('jual-add'),
                   codePoint: PhosphorCode.plus,
-                  onPressed: () => ProductCameraScreen.push(context),
+                  onPressed: () => AddProductScreen.push(context),
                 ),
               ],
             ),
@@ -173,16 +192,9 @@ class _JualScreenState extends ConsumerState<JualScreen> {
             ),
             const SizedBox(height: 16),
             if (visible.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Text(
-                  'Belum ada barang di filter ini.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: KosplyColors.textSecondaryOf(context),
-                  ),
-                ),
+              const EmptyStateCard(
+                icon: PhosphorCode.package,
+                message: 'Belum ada barang di filter ini.',
               )
             else
               ProductGrid(items: visible),

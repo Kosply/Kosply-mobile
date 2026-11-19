@@ -12,6 +12,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../models/support/help_topic.dart';
 import '../../../providers/support/support_providers.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
 import '../../../widgets/common/forms/kosply_dropdown.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/common/headings/section_heading.dart';
@@ -78,9 +79,8 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => _sending = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
       }
       return;
     }
@@ -101,99 +101,104 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
     final List<HelpTopic> topics =
         ref.watch(helpTopicsProvider).value ?? const <HelpTopic>[];
 
-    return Scaffold(
-      backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: AppBar(
+    return RouteGapHost(
+      gap: kBottomBarGap,
+      child: Scaffold(
         backgroundColor: KosplyColors.backgroundOf(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: PhosphorGlyph(
-            PhosphorCode.arrowLeft,
-            size: 20,
-            color: KosplyColors.textPrimaryOf(context),
-          ),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(
-          'Buat ticket',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: KosplyColors.textPrimaryOf(context),
-          ),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          const SectionHeading('Kategori masalah'),
-          const SizedBox(height: 12),
-          KosplyDropdown(
-            key: const Key('create-ticket-dropdown'),
-            items: <String>[for (final HelpTopic topic in topics) topic.title],
-            value: _topic,
-            hint: 'Pilih masalah umum',
-            onChanged: (String value) {
-              setState(() => _topic = value);
-            },
-          ),
-          const SizedBox(height: 20),
-          const SectionHeading('Pesan'),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(
-              color: KosplyColors.surfaceOf(context),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: KosplyColors.outlineOf(context)),
+        appBar: AppBar(
+          backgroundColor: KosplyColors.backgroundOf(context),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: PhosphorGlyph(
+              PhosphorCode.arrowLeft,
+              size: 20,
+              color: KosplyColors.textPrimaryOf(context),
             ),
-            child: TextField(
-              key: const Key('create-ticket-message'),
-              controller: _message,
-              maxLines: 5,
-              cursorColor: KosplyColors.primary,
-              style: TextStyle(
-                fontSize: 14,
-                color: KosplyColors.textPrimaryOf(context),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          title: Text(
+            'Buat ticket',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: KosplyColors.textPrimaryOf(context),
+            ),
+          ),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            const SectionHeading('Kategori masalah'),
+            const SizedBox(height: 12),
+            KosplyDropdown(
+              key: const Key('create-ticket-dropdown'),
+              items: <String>[
+                for (final HelpTopic topic in topics) topic.title,
+              ],
+              value: _topic,
+              hint: 'Pilih masalah umum',
+              onChanged: (String value) {
+                setState(() => _topic = value);
+              },
+            ),
+            const SizedBox(height: 20),
+            const SectionHeading('Pesan'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: KosplyColors.surfaceOf(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: KosplyColors.outlineOf(context)),
               ),
-              decoration: InputDecoration(
-                hintText: 'Ceritakan kendalanya secara singkat.',
-                hintStyle: TextStyle(
+              child: TextField(
+                key: const Key('create-ticket-message'),
+                controller: _message,
+                maxLines: 5,
+                cursorColor: KosplyColors.primary,
+                style: TextStyle(
                   fontSize: 14,
-                  color: KosplyColors.textSecondaryOf(context),
+                  color: KosplyColors.textPrimaryOf(context),
                 ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
+                decoration: InputDecoration(
+                  hintText: 'Ceritakan kendalanya secara singkat.',
+                  hintStyle: TextStyle(
+                    fontSize: 14,
+                    color: KosplyColors.textSecondaryOf(context),
+                  ),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Material(
-        color: KosplyColors.surfaceOf(context),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: ElevatedButton(
-                key: const Key('create-ticket-submit'),
-                onPressed: _sending ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: KosplyColors.primary,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+          ],
+        ),
+        bottomNavigationBar: Material(
+          color: KosplyColors.surfaceOf(context),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: ElevatedButton(
+                  key: const Key('create-ticket-submit'),
+                  onPressed: _sending ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: KosplyColors.primary,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Kirim ticket',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  child: const Text(
+                    'Kirim ticket',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ),

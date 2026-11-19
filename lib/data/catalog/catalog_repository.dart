@@ -34,6 +34,10 @@ class NewListing {
   /// @param stock Units available.
   /// @param imageUrls Uploaded photo URLs, cover first.
   /// @param locationLabel Meeting point.
+  /// @param latitude Pin for [locationLabel], when the seller picked one.
+  /// @param longitude Pin for [locationLabel], when the seller picked one.
+  /// @param includeCoordinates When true, [latitude] and [longitude] are
+  /// written even if they are null, so an edited label can drop a stale pin.
   /// @return A new {NewListing} instance.
   const NewListing({
     required this.title,
@@ -43,6 +47,9 @@ class NewListing {
     required this.stock,
     required this.imageUrls,
     this.locationLabel = '',
+    this.latitude,
+    this.longitude,
+    this.includeCoordinates = false,
   });
 
   /// @dev Item name.
@@ -65,6 +72,15 @@ class NewListing {
 
   /// @dev Meeting point.
   final String locationLabel;
+
+  /// @dev Pin latitude. Null when the seller did not pick a place.
+  final double? latitude;
+
+  /// @dev Pin longitude. Null when the seller did not pick a place.
+  final double? longitude;
+
+  /// @dev Whether [latitude] and [longitude] are part of the payload.
+  final bool includeCoordinates;
 }
 
 /// @title CatalogRepository
@@ -241,6 +257,19 @@ class CatalogRepository {
     }
   }
 
+  /// @notice Active product categories in display order.
+  /// @return Names the add-product dropdown can select.
+  Future<List<String>> categories() async {
+    final Map<String, dynamic> json = await api.get(
+      '/api/categories',
+      auth: false,
+    );
+    return <String>[
+      for (final Map<String, dynamic> item in json.objects('items'))
+        if (item.str('name').isNotEmpty) item.str('name'),
+    ];
+  }
+
   /// @notice Posts a new listing and caches the server's copy.
   /// @param listing Form fields.
   /// @return The new product id.
@@ -256,6 +285,10 @@ class CatalogRepository {
         'imageUrls': listing.imageUrls,
         if (listing.locationLabel.isNotEmpty)
           'locationLabel': listing.locationLabel,
+        if (listing.includeCoordinates) ...<String, Object?>{
+          'latitude': listing.latitude,
+          'longitude': listing.longitude,
+        },
       },
     );
     final Map<String, dynamic> item =
@@ -284,6 +317,10 @@ class CatalogRepository {
         'stock': listing.stock,
         'imageUrls': listing.imageUrls,
         'locationLabel': listing.locationLabel,
+        if (listing.includeCoordinates) ...<String, Object?>{
+          'latitude': listing.latitude,
+          'longitude': listing.longitude,
+        },
       },
     );
     await _writeProduct(json.object('item') ?? const <String, dynamic>{});
@@ -435,6 +472,7 @@ class CatalogRepository {
       universitas: optional('universitas'),
       programStudi: optional('programStudi'),
       role: optional('role'),
+      backendUpdatedAt: _activityStamp(user),
       updatedAt: Value<int>(now),
       lastFetched: Value<int>(now),
     );
@@ -464,6 +502,8 @@ class CatalogRepository {
       sellerName: seller?.name ?? '',
       sellerAvatarPath: seller?.photo ?? '',
       sellerActiveLabel: seller == null ? '' : _activityOf(seller),
+      latitude: row.latitude,
+      longitude: row.longitude,
     );
   }
 
@@ -478,6 +518,16 @@ class CatalogRepository {
       activeLabel: _activityOf(row),
       bio: row.bio,
     );
+  }
+
+  /// @notice Activity time from a public user, when the payload has one.
+  /// @param user Backend user.
+  /// @return The stamp, or absent so a later profile fetch is not wiped to zero.
+  Value<int> _activityStamp(Map<String, dynamic> user) {
+    final int updated = user.millis('updatedAt');
+    final int seen = user.millis('lastSeenAt');
+    final int stamp = updated == 0 ? seen : updated;
+    return stamp == 0 ? const Value<int>.absent() : Value<int>(stamp);
   }
 
   /// @notice "aktif ... lalu" when the backend sent an activity time.

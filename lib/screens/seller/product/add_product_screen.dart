@@ -10,21 +10,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../models/catalog/listing_card.dart';
 import '../../../models/catalog/listing_photos.dart';
+import '../../../providers/catalog/catalog_providers.dart';
 import '../../../providers/catalog/listing_draft_provider.dart';
 import '../../../providers/catalog/listing_photos_provider.dart';
+import '../../../providers/catalog/product_form_fill_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
+import '../../../widgets/common/forms/kosply_dropdown.dart';
+import '../../../widgets/common/forms/location_suggest_field.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
+import '../../../core/network/api_exception.dart';
+import 'product_camera_screen.dart';
 
 /// @title AddProductScreen
-/// @notice New listing form opened from the product camera's Lanjut button.
-/// @dev Shows the photos captured in {ProductCameraScreen}, which stays below
-/// this route so "Ubah foto" just pops back to it. On open the photos are
-/// uploaded and the AI fills name, category and description from them
-/// (`agent_spec/tables/listing.md`); those three fields are locked so the
-/// listing always matches its photos. The seller types price, location and
-/// quantity, then `POST /api/products` publishes it.
+/// @notice New listing form opened from the Jual plus button.
+/// @dev The seller types every field and adds photos from the camera. An
+/// approved AI preview can fill nama, harga, deskripsi, and kategori. Pasang
+/// barang still waits for the seller's tap.
 class AddProductScreen extends ConsumerStatefulWidget {
   /// @notice Creates the add-product screen.
   /// @return A new {AddProductScreen} instance.
@@ -34,10 +37,14 @@ class AddProductScreen extends ConsumerStatefulWidget {
   static const routeName = '/add-product';
 
   /// @notice Pushes this screen onto the current route stack.
+  /// @dev A typed [MaterialPageRoute] is required. The named-route table
+  /// builds `Route<dynamic>`, and `pushNamed<bool>` then throws.
   /// @param context The build context.
   /// @return True when the listing was published.
   static Future<bool?> push(BuildContext context) {
-    return Navigator.of(context).pushNamed<bool>(routeName);
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => const AddProductScreen()),
+    );
   }
 
   /// @notice Creates the mutable form state.
@@ -47,50 +54,103 @@ class AddProductScreen extends ConsumerStatefulWidget {
 }
 
 /// @title _AddProductScreenState
-/// @notice Holds the seller's fields and mirrors the AI card into the locked
-/// ones.
+/// @notice Holds the seller's fields. An approved AI preview may fill four
+/// of them. Pasang barang stays a tap.
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _price = TextEditingController();
   final TextEditingController _location = TextEditingController();
   final TextEditingController _quantity = TextEditingController(text: '1');
-  final TextEditingController _category = TextEditingController();
   final TextEditingController _description = TextEditingController();
+  List<String> _categories = const <String>[];
+  String? _category;
+  bool _categoriesReady = false;
   String? _formError;
+  double? _latitude;
+  double? _longitude;
+  String? _wantedCategory;
+  int _appliedFill = 0;
+  late final AddProductPresence _presence;
 
   @override
   void initState() {
     super.initState();
-    // Provider writes are not allowed while the tree builds, so the upload
-    // starts right after the first frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    _presence = ref.read(addProductPresenceProvider);
+    _presence.mounted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _loadCategories();
+      _applyFill(ref.read(productFormFillProvider));
+    });
   }
 
   /// @notice Releases the field controllers.
   /// @return void
   @override
   void dispose() {
+    _presence.mounted = false;
     _title.dispose();
     _price.dispose();
     _location.dispose();
     _quantity.dispose();
-    _category.dispose();
     _description.dispose();
     super.dispose();
   }
 
-  void _start() {
-    if (!mounted) {
-      return;
+  Future<void> _loadCategories() async {
+    try {
+      final List<String> names = await ref
+          .read(catalogRepositoryProvider)
+          .categories();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _categories = names;
+        _categoriesReady = true;
+        _selectCategory();
+      });
+    } on ApiException {
+      if (mounted) {
+        setState(() => _categoriesReady = true);
+      }
     }
-    final List<String> photos = ref.read(listingPhotosProvider).paths;
-    unawaited(ref.read(listingDraftProvider.notifier).start(photos));
   }
 
-  void _fill(ListingCard card) {
-    _title.text = card.title;
-    _category.text = card.category;
-    _description.text = card.description;
+  /// @notice Copies an approved preview into the four fields.
+  /// @param fill Latest fill, or null when nothing was approved.
+  /// @return void
+  void _applyFill(ProductFormFill? fill) {
+    if (fill == null || !mounted || fill.token == _appliedFill) {
+      return;
+    }
+    _appliedFill = fill.token;
+    _title.text = fill.title;
+    _price.text = fill.price.toString();
+    _description.text = fill.description;
+    _wantedCategory = fill.category;
+    setState(_selectCategory);
+  }
+
+  /// @notice Selects the dropdown row that matches the wanted category.
+  /// @return void
+  void _selectCategory() {
+    final String? wanted = _wantedCategory?.trim().toLowerCase();
+    if (wanted == null || wanted.isEmpty) {
+      return;
+    }
+    for (final String name in _categories) {
+      if (name.toLowerCase() == wanted) {
+        _category = name;
+        return;
+      }
+    }
+  }
+
+  void _openCamera() {
+    unawaited(ProductCameraScreen.push(context));
   }
 
   /// @notice Reads digits only, so "Rp.375.000" and "375000" both work.
@@ -102,8 +162,25 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   Future<void> _publish() async {
+    final String title = _title.text.trim();
+    final String description = _description.text.trim();
     final int? price = _digits(_price.text);
     final int stock = _digits(_quantity.text) ?? 0;
+    final List<String> photos = ref.read(listingPhotosProvider).paths;
+    if (title.isEmpty) {
+      setState(() => _formError = 'Isi nama barang dulu.');
+      return;
+    }
+    if (photos.length < ListingPhotos.required) {
+      setState(
+        () => _formError = 'Ambil ${ListingPhotos.required} foto barang dulu.',
+      );
+      return;
+    }
+    if (_category == null || _category!.isEmpty) {
+      setState(() => _formError = 'Pilih kategori dulu.');
+      return;
+    }
     if (price == null) {
       setState(() => _formError = 'Isi harga barang dulu.');
       return;
@@ -112,295 +189,243 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       setState(() => _formError = 'Kuantitas minimal 1.');
       return;
     }
+    if (description.isEmpty) {
+      setState(() => _formError = 'Isi deskripsi dulu.');
+      return;
+    }
     setState(() => _formError = null);
     final bool published = await ref
         .read(listingDraftProvider.notifier)
-        .publish(price: price, stock: stock, location: _location.text.trim());
+        .publish(
+          title: title,
+          description: description,
+          category: _category!,
+          price: price,
+          stock: stock,
+          location: _location.text.trim(),
+          photoPaths: photos,
+          latitude: _latitude,
+          longitude: _longitude,
+        );
     if (published && mounted) {
       Navigator.of(context).pop(true);
     }
   }
 
-  /// @notice Builds the stacked listing form.
+  /// @notice Builds the listing form.
   /// @param context The build context.
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.listen<ProductFormFill?>(productFormFillProvider, (
+      ProductFormFill? previous,
+      ProductFormFill? next,
+    ) {
+      _applyFill(next);
+    });
     final Color onShell = KosplyColors.textPrimaryOf(context);
     final List<String> photos = ref.watch(listingPhotosProvider).paths;
     final ListingDraft draft = ref.watch(listingDraftProvider);
-    ref.listen<ListingDraft>(listingDraftProvider, (
-      ListingDraft? previous,
-      ListingDraft next,
-    ) {
-      final ListingCard? card = next.card;
-      if (card != null && previous?.card != card) {
-        _fill(card);
-      }
-    });
-    final bool locked = !draft.hasCard;
-    final bool canPublish =
-        draft.status == ListingDraftStatus.ready && !draft.isBusy;
+    final bool busy = draft.isBusy;
     final String? error = _formError ?? draft.error;
 
-    return Scaffold(
-      backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: AppBar(
-        backgroundColor: KosplyColors.backgroundOf(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: PhosphorGlyph(PhosphorCode.arrowLeft, size: 20, color: onShell),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(
-          'Tambah barang',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: onShell,
+    return RouteGapHost(
+      gap: kBottomBarGap,
+      child: PopScope(
+        canPop: !busy,
+        child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          backgroundColor: KosplyColors.backgroundOf(context),
+          appBar: AppBar(
+            backgroundColor: KosplyColors.backgroundOf(context),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              key: const Key('add-product-back'),
+              icon: PhosphorGlyph(
+                PhosphorCode.arrowLeft,
+                size: 20,
+                color: onShell,
+              ),
+              onPressed: busy ? null : () => Navigator.of(context).maybePop(),
+            ),
+            title: Text(
+              'Tambah barang',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: onShell,
+              ),
+            ),
           ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (photos.isEmpty)
-              Container(
-                key: const Key('add-product-photo'),
-                height: 160,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: KosplyColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: KosplyColors.outlineOf(context)),
-                ),
-                child: const Center(
-                  child: PhosphorGlyph(
-                    PhosphorCode.plus,
-                    size: 28,
-                    color: KosplyColors.primary,
-                  ),
-                ),
-              )
-            else
-              _PhotoStrip(
-                paths: photos,
-                onEdit: () => Navigator.of(context).maybePop(),
-              ),
-            const SizedBox(height: 12),
-            _AiStatusBanner(
-              draft: draft,
-              hasPhotos: photos.isNotEmpty,
-              onRetry: _start,
-            ),
-            const SizedBox(height: 20),
-            _LabeledField(
-              label: 'Nama barang',
-              hint: locked ? 'Menunggu AI…' : 'Meja belajar lipat',
-              controller: _title,
-              fieldKey: const Key('add-product-title'),
-              locked: true,
-            ),
-            const SizedBox(height: 16),
-            _LabeledField(
-              label: 'Harga',
-              hint: 'Rp.375.000',
-              controller: _price,
-              fieldKey: const Key('add-product-price'),
-              keyboardType: TextInputType.number,
-              inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-            ),
-            const SizedBox(height: 16),
-            _LabeledField(
-              label: 'Lokasi',
-              hint: 'Dekat gedung a',
-              controller: _location,
-              fieldKey: const Key('add-product-location'),
-            ),
-            const SizedBox(height: 16),
-            _LabeledField(
-              label: 'Kuantitas',
-              hint: '1',
-              controller: _quantity,
-              fieldKey: const Key('add-product-quantity'),
-              keyboardType: TextInputType.number,
-              inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-            ),
-            const SizedBox(height: 16),
-            _LabeledField(
-              label: 'Kategori',
-              hint: locked ? 'Menunggu AI…' : 'Kategori',
-              controller: _category,
-              fieldKey: const Key('add-product-category'),
-              locked: true,
-            ),
-            const SizedBox(height: 16),
-            _LabeledField(
-              label: 'Deskripsi',
-              hint: locked
-                  ? 'Menunggu AI…'
-                  : 'Kondisi barang, kelengkapan, dan cara ketemu di kampus.',
-              controller: _description,
-              fieldKey: const Key('add-product-description'),
-              maxLines: 4,
-              locked: true,
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                error,
-                key: const Key('add-product-error'),
-                style: const TextStyle(fontSize: 13, color: KosplyColors.error),
-              ),
-            ],
-          ],
-        ),
-      ),
-      bottomNavigationBar: Material(
-        color: KosplyColors.surfaceOf(context),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: ElevatedButton(
-                key: const Key('add-product-submit'),
-                onPressed: canPublish ? _publish : null,
-                style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: KosplyColors.primary,
-                  disabledBackgroundColor: KosplyColors.primary.withValues(
-                    alpha: 0.4,
-                  ),
-                  disabledForegroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: draft.status == ListingDraftStatus.publishing
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (photos.isEmpty)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      key: const Key('add-product-photo'),
+                      onTap: busy ? null : _openCamera,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Ink(
+                        height: 160,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: KosplyColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: KosplyColors.outlineOf(context),
+                          ),
                         ),
-                      )
-                    : const Text(
-                        'Pasang barang',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                        child: const Center(
+                          child: PhosphorGlyph(
+                            PhosphorCode.plus,
+                            size: 28,
+                            color: KosplyColors.primary,
+                          ),
                         ),
                       ),
+                    ),
+                  )
+                else
+                  _PhotoStrip(
+                    paths: photos,
+                    onEdit: busy ? () {} : _openCamera,
+                  ),
+                const SizedBox(height: 20),
+                _LabeledField(
+                  label: 'Nama barang',
+                  hint: 'Meja belajar lipat',
+                  controller: _title,
+                  fieldKey: const Key('add-product-title'),
+                  maxLength: 80,
+                ),
+                const SizedBox(height: 16),
+                _LabeledField(
+                  label: 'Harga',
+                  hint: 'Rp.375.000',
+                  controller: _price,
+                  fieldKey: const Key('add-product-price'),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                ),
+                const SizedBox(height: 16),
+                LocationSuggestField(
+                  controller: _location,
+                  fieldKey: const Key('add-product-location'),
+                  prefill: true,
+                  onPin: (double? latitude, double? longitude) {
+                    _latitude = latitude;
+                    _longitude = longitude;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _LabeledField(
+                  label: 'Kuantitas',
+                  hint: '1',
+                  controller: _quantity,
+                  fieldKey: const Key('add-product-quantity'),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Kategori',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: KosplyColors.textPrimaryOf(context),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                KeyedSubtree(
+                  key: const Key('add-product-category'),
+                  child: KosplyDropdown(
+                    items: _categories,
+                    value: _category,
+                    hint: _categoriesReady
+                        ? 'Pilih kategori'
+                        : 'Memuat kategori…',
+                    onChanged: (String next) =>
+                        setState(() => _category = next),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _LabeledField(
+                  label: 'Deskripsi',
+                  hint: 'Kondisi, kelengkapan, dan kekurangan.',
+                  controller: _description,
+                  fieldKey: const Key('add-product-description'),
+                  minLines: 4,
+                  maxLines: 12,
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    error,
+                    key: const Key('add-product-error'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: KosplyColors.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          bottomNavigationBar: Material(
+            color: KosplyColors.surfaceOf(context),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: SizedBox(
+                  height: 52,
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    key: const Key('add-product-submit'),
+                    onPressed: busy ? null : _publish,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: KosplyColors.primary,
+                      disabledBackgroundColor: KosplyColors.primary.withValues(
+                        alpha: 0.4,
+                      ),
+                      disabledForegroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: busy
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Pasang barang',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// @title _AiStatusBanner
-/// @notice Says what the AI is doing with the photos, or why it stopped.
-class _AiStatusBanner extends StatelessWidget {
-  const _AiStatusBanner({
-    required this.draft,
-    required this.hasPhotos,
-    required this.onRetry,
-  });
-
-  final ListingDraft draft;
-  final bool hasPhotos;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final String message;
-    switch (draft.status) {
-      case ListingDraftStatus.idle:
-        message = hasPhotos
-            ? 'Menyiapkan foto…'
-            : 'Ambil ${ListingPhotos.required} foto barang dulu, nanti AI '
-                  'mengisi nama, kategori, dan deskripsi.';
-      case ListingDraftStatus.uploading:
-        message = 'Mengunggah foto ${draft.uploaded}/${draft.total}…';
-      case ListingDraftStatus.filling:
-        message = 'AI sedang membaca foto barang…';
-      case ListingDraftStatus.ready:
-      case ListingDraftStatus.publishing:
-      case ListingDraftStatus.published:
-        message =
-            'Diisi AI dari foto. Nama, kategori, dan deskripsi dikunci; '
-            'kamu tinggal isi harga, lokasi, dan kuantitas.';
-      case ListingDraftStatus.failed:
-        message = draft.error ?? 'AI belum bisa mengisi. Coba lagi.';
-    }
-    final bool failed = draft.status == ListingDraftStatus.failed;
-    final bool working =
-        draft.status == ListingDraftStatus.uploading ||
-        draft.status == ListingDraftStatus.filling ||
-        (draft.status == ListingDraftStatus.idle && hasPhotos);
-
-    return Container(
-      key: const Key('add-product-ai-status'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: (failed ? KosplyColors.error : KosplyColors.primary).withValues(
-          alpha: 0.08,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          if (working)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: KosplyColors.primary,
-              ),
-            )
-          else
-            PhosphorGlyph(
-              PhosphorCode.brain,
-              size: 18,
-              color: failed ? KosplyColors.error : KosplyColors.primary,
-            ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: KosplyColors.textPrimaryOf(context),
-              ),
-            ),
-          ),
-          if (failed && hasPhotos)
-            TextButton(
-              key: const Key('add-product-retry'),
-              onPressed: onRetry,
-              style: TextButton.styleFrom(
-                foregroundColor: KosplyColors.primary,
-              ),
-              child: const Text('Coba lagi'),
-            ),
-        ],
       ),
     );
   }
@@ -531,7 +556,6 @@ class _PhotoTile extends StatelessWidget {
 
 /// @title _LabeledField
 /// @notice Label stacked above an outlined text field.
-/// @dev A [locked] field is filled by the AI and cannot be edited.
 class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
@@ -540,8 +564,9 @@ class _LabeledField extends StatelessWidget {
     required this.fieldKey,
     this.keyboardType,
     this.inputFormatters,
+    this.minLines,
     this.maxLines = 1,
-    this.locked = false,
+    this.maxLength,
   });
 
   final String label;
@@ -550,49 +575,28 @@ class _LabeledField extends StatelessWidget {
   final Key fieldKey;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
+  final int? minLines;
   final int maxLines;
-  final bool locked;
+  final int? maxLength;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: KosplyColors.textPrimaryOf(context),
-              ),
-            ),
-            if (locked) ...[
-              const SizedBox(width: 6),
-              PhosphorGlyph(
-                PhosphorCode.lockSimple,
-                size: 12,
-                color: KosplyColors.textSecondaryOf(context),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Diisi AI',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: KosplyColors.textSecondaryOf(context),
-                ),
-              ),
-            ],
-          ],
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: KosplyColors.textPrimaryOf(context),
+          ),
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
-            color: locked
-                ? KosplyColors.outlineOf(context).withValues(alpha: 0.25)
-                : KosplyColors.surfaceOf(context),
+            color: KosplyColors.surfaceOf(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: KosplyColors.outlineOf(context)),
           ),
@@ -601,9 +605,15 @@ class _LabeledField extends StatelessWidget {
             controller: controller,
             keyboardType: keyboardType,
             inputFormatters: inputFormatters,
-            readOnly: locked,
-            enableInteractiveSelection: !locked,
+            minLines: minLines,
             maxLines: maxLines,
+            maxLength: maxLength,
+            buildCounter: (
+              BuildContext context, {
+              required int currentLength,
+              required bool isFocused,
+              required int? maxLength,
+            }) => null,
             cursorColor: KosplyColors.primary,
             style: TextStyle(
               fontSize: 14,

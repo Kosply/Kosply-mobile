@@ -68,3 +68,9 @@ class VerificationRepository {
 final verificationRepositoryProvider = Provider<VerificationRepository>(
   (ref) => VerificationRepository(api: ref.watch(apiClientProvider)),
 );
+
+/// @dev The caller's application. Invalidated after a submit or a refresh.
+final sellerVerificationProvider =
+    FutureProvider.autoDispose<SellerVerification?>((ref) {
+      return ref.watch(verificationRepositoryProvider).mine();
+    });

@@ -23,6 +23,8 @@ class Product {
   /// @param sellerName Display name of the seller.
   /// @param sellerAvatarPath Asset path of the seller photo.
   /// @param sellerActiveLabel Relative activity line for the seller.
+  /// @param latitude Meeting-point latitude. `0` means the listing has no pin.
+  /// @param longitude Meeting-point longitude. `0` means the listing has no pin.
   /// @return A new {Product} instance.
   const Product({
     required this.id,
@@ -38,6 +40,8 @@ class Product {
     this.sellerName = 'seller',
     this.sellerAvatarPath = '',
     this.sellerActiveLabel = '',
+    this.latitude = 0,
+    this.longitude = 0,
   });
 
   /// @dev Stable identifier used to route to the detail screen.
@@ -78,6 +82,12 @@ class Product {
 
   /// @dev Relative activity line for the seller.
   final String sellerActiveLabel;
+
+  /// @dev Meeting-point latitude. `0` means the listing has no pin.
+  final double latitude;
+
+  /// @dev Meeting-point longitude. `0` means the listing has no pin.
+  final double longitude;
 
   /// @notice Numeric price parsed from [price], used to sort "Termurah".
   int get priceValue {

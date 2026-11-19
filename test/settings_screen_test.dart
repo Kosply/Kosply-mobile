@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kosply_mobile/core/camera/providers/camera_provider.dart';
 import 'package:kosply_mobile/providers/settings/theme_mode_provider.dart';
 import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
 import 'package:kosply_mobile/screens/settings/app/app_setting_screen.dart';
@@ -24,7 +25,26 @@ import 'package:kosply_mobile/theme/app/kosply_theme.dart';
 import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 import 'package:kosply_mobile/widgets/settings/card/settings_section_card.dart';
 
+import 'helpers/fake_backend.dart';
+import 'helpers/fake_listing_camera.dart';
 import 'helpers/kosply_test_app.dart';
+
+/// @notice A stored KTM application for the settings gate.
+/// @param status `APPROVED`, `PENDING`, or `REJECTED`.
+/// @param reason Reviewer note shown on the welcome card when rejected.
+/// @return A backend whose `GET /api/verifications/me` returns that row.
+FakeKosplyBackend _verification(String status, {String reason = ''}) {
+  return FakeKosplyBackend()
+    ..verification = <String, dynamic>{
+      'id': 'verify-1',
+      'status': status,
+      'namaLengkap': 'Fajar Uji',
+      'nim': '253140701111034',
+      'universitas': 'Universitas Brawijaya',
+      'programStudi': 'S1 Teknik Informatika',
+      'rejectionReason': reason,
+    };
+}
 
 /// @notice Wraps [home] with the app themes and the settings routes.
 /// @param home Screen under test.
@@ -82,7 +102,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('switching to penjual updates the mode line', (
+  testWidgets('switching to penjual opens welcome until review passes', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1170, 3600);
@@ -92,12 +112,47 @@ void main() {
     await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
 
     expect(find.textContaining('Mode pembeli'), findsOneWidget);
+    expect(find.text('Verifikasi kampus'), findsNothing);
 
     await tester.tap(find.text('Penjual'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
+    expect(find.text('Welcome'), findsOneWidget);
+    expect(find.text('Verifikasi'), findsOneWidget);
+    expect(find.text('Analytic'), findsNothing);
+    expect(find.text('Setting'), findsNothing);
+
+    final Offset icon = tester.getCenter(
+      find.byKey(const Key('seller-welcome-icon')),
+    );
+    final Offset glyph = tester.getCenter(
+      find.byKey(const Key('seller-welcome-glyph')),
+    );
+    expect((glyph - icon).distance, lessThan(1));
+  });
+
+  testWidgets('an approved seller opens seller settings', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 3600);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await pumpKosplyApp(
+      tester,
+      const SettingsScreen(),
+      app: _app,
+      backend: _verification('APPROVED'),
+    );
+
+    await tester.tap(find.text('Penjual'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Setting'), findsOneWidget);
     expect(find.textContaining('Mode penjual'), findsOneWidget);
     expect(find.text('Analytic'), findsOneWidget);
+    expect(find.text('Welcome'), findsNothing);
+    expect(find.text('Verifikasi kampus'), findsNothing);
   });
 
   testWidgets('dark mode switch flips the app theme', (
@@ -149,10 +204,15 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
+    await pumpKosplyApp(
+      tester,
+      const SettingsScreen(),
+      app: _app,
+      backend: _verification('APPROVED'),
+    );
 
     await tester.tap(find.text('Penjual'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Profile setting'));
     await tester.pumpAndSettle();
 
@@ -328,10 +388,15 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await pumpKosplyApp(tester, const SettingsScreen(), app: _app);
+    await pumpKosplyApp(
+      tester,
+      const SettingsScreen(),
+      app: _app,
+      backend: _verification('APPROVED'),
+    );
 
     await tester.tap(find.text('Penjual'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Analytic'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Analytic'));
@@ -339,7 +404,9 @@ void main() {
 
     expect(find.byType(AnalyticScreen), findsOneWidget);
     expect(find.text('Views'), findsOneWidget);
-    expect(find.text('Trading product kamu'), findsOneWidget);
+    expect(find.text('Semua product kamu'), findsOneWidget);
+    expect(find.byKey(const Key('analytic-empty-shelf')), findsOneWidget);
+    expect(find.text('Trading product kamu'), findsNothing);
   });
 
   testWidgets('help desk opens the dropdown screen', (
@@ -375,5 +442,103 @@ void main() {
     expect(find.byType(ContactSupportScreen), findsOneWidget);
     expect(find.text('Cari ticket...'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
+  });
+
+  testWidgets(
+    'a pending seller refreshes welcome instead of opening settings',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1170, 3600);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      await pumpKosplyApp(
+        tester,
+        const SettingsScreen(),
+        app: _app,
+        backend: _verification('PENDING'),
+      );
+
+      await tester.tap(find.text('Penjual'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Refresh'), findsOneWidget);
+      expect(find.text('Setting'), findsNothing);
+      expect(find.byKey(const Key('seller-welcome-reason')), findsNothing);
+    },
+  );
+
+  testWidgets('a rejected seller sees why under the welcome explanation', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 3600);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await pumpKosplyApp(
+      tester,
+      const SettingsScreen(),
+      app: _app,
+      backend: _verification('REJECTED', reason: 'Foto KTM buram.'),
+    );
+
+    await tester.tap(find.text('Penjual'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Foto KTM buram.'), findsOneWidget);
+    expect(find.text('Verifikasi'), findsOneWidget);
+    expect(find.text('Setting'), findsNothing);
+  });
+
+  testWidgets('verifikasi uploads a KTM and previews the card', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 3600);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await pumpKosplyApp(
+      tester,
+      const SettingsScreen(),
+      app: _app,
+      overrides: [
+        listingCameraFactoryProvider.overrideWithValue(FakeListingCamera.new),
+      ],
+    );
+
+    await tester.tap(find.text('Penjual'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Verifikasi'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Verifikasi kampus'), findsOneWidget);
+    expect(find.text('Nama lengkap'), findsNothing);
+    expect(find.text('NIM'), findsNothing);
+    expect(find.text('Universitas'), findsNothing);
+    expect(find.text('Program studi'), findsNothing);
+    expect(find.byKey(const Key('upload-nim-card')), findsOneWidget);
+    expect(find.text('Lanjut'), findsNothing);
+
+    final Offset icon = tester.getCenter(
+      find.byKey(const Key('upload-nim-icon')),
+    );
+    final Offset glyph = tester.getCenter(
+      find.byKey(const Key('upload-nim-glyph')),
+    );
+    expect((glyph - icon).distance, lessThan(1));
+
+    await tester.tap(find.byKey(const Key('upload-nim-pick')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ktm-shutter')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pratinjau KTM'), findsOneWidget);
+    expect(find.byKey(const Key('ktm-camera-preview')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ktm-use')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('ktm-preview')), findsOneWidget);
+    expect(find.byKey(const Key('upload-nim-icon')), findsNothing);
+    expect(find.text('Complete'), findsOneWidget);
   });
 }

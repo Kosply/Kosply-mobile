@@ -23,7 +23,6 @@ import 'package:kosply_mobile/providers/chat/ai_chat_provider.dart';
 import 'package:kosply_mobile/providers/inbox/inbox_providers.dart';
 import 'package:kosply_mobile/providers/support/support_providers.dart';
 import 'package:kosply_mobile/screens/main/home/home_screen.dart';
-import 'package:kosply_mobile/widgets/ai/overlay/ai_overlay_layer.dart';
 
 import 'helpers/fake_backend.dart';
 import 'helpers/kosply_test_app.dart';
@@ -44,11 +43,7 @@ void main() {
     final FakeKosplyBackend backend = FakeKosplyBackend();
     backend.aiThinking = 'lagi mikir';
     backend.aiNeedsApproval = true;
-    await pumpKosplyApp(
-      tester,
-      const AiOverlayLayer(child: HomeScreen()),
-      backend: backend,
-    );
+    await pumpKosplyApp(tester, const HomeScreen(), backend: backend);
 
     await tester.tap(find.byKey(const Key('ai-fab')));
     await tester.pump();
@@ -58,17 +53,25 @@ void main() {
       await tester.pump();
     }
 
+    expect(find.text('Proses berpikir'), findsOneWidget);
+    expect(find.text('lagi mikir'), findsNothing);
+    await tester.ensureVisible(find.text('Proses berpikir'));
+    await tester.tap(find.text('Proses berpikir'));
+    await tester.pump();
     expect(find.text('lagi mikir'), findsOneWidget);
-    expect(find.text(AiChatRepository.approvalText), findsOneWidget);
+    expect(find.text('Preview pesan'), findsOneWidget);
+    expect(find.text('Halo, barangnya masih ada?'), findsOneWidget);
+    expect(find.text(AiChatRepository.approvalAsk), findsOneWidget);
+    expect(find.text(AiChatRepository.approvalText), findsNothing);
     expect(find.byKey(const Key('ai-approve')), findsOneWidget);
     expect(find.byKey(const Key('ai-reject')), findsOneWidget);
     expect(find.textContaining('telepon'), findsNothing);
     expect(backend.calls('POST', '/api/ai/chat/stream'), isNotEmpty);
     expect(backend.calls('POST', '/api/ai/chat'), isEmpty);
 
-    final Map<String, dynamic> sent =
-        jsonDecode(backend.calls('POST', '/api/ai/chat/stream').last.body)
-            as Map<String, dynamic>;
+    final Map<String, dynamic> sent = jsonDecode(
+      backend.calls('POST', '/api/ai/chat/stream').last.body,
+    ) as Map<String, dynamic>;
     expect(sent['message'], 'Tanya penjual');
     expect(
       backend.requests.where(
@@ -83,10 +86,12 @@ void main() {
     await tester.pump();
 
     expect(find.text('Disetujui.'), findsOneWidget);
+    expect(find.text('Preview pesan'), findsNothing);
+    expect(find.text(aiPendingText), findsNothing);
     expect(find.byKey(const Key('ai-approve')), findsNothing);
-    final Map<String, dynamic> resume =
-        jsonDecode(backend.calls('POST', '/api/ai/chat/resume').single.body)
-            as Map<String, dynamic>;
+    final Map<String, dynamic> resume = jsonDecode(
+      backend.calls('POST', '/api/ai/chat/resume').single.body,
+    ) as Map<String, dynamic>;
     expect(resume['approve'], isTrue);
     expect(tester.takeException(), isNull);
   });
@@ -111,15 +116,14 @@ void main() {
     expect(partials, <String>['lagi mikir|']);
     expect(turn.thinking, 'lagi mikir');
     expect(turn.needsApproval, isTrue);
-    expect(turn.answer, AiChatRepository.approvalText);
+    expect(turn.draft, 'Halo, barangnya masih ada?');
+    expect(turn.answer, AiChatRepository.approvalAsk);
   });
 
   test('listing writes, events, inbox, and reports hit the backend', () async {
     final FakeKosplyBackend backend = FakeKosplyBackend();
     final ProviderContainer container = await seededContainer(backend: backend);
-    final CatalogRepository catalog = container.read(
-      catalogRepositoryProvider,
-    );
+    final CatalogRepository catalog = container.read(catalogRepositoryProvider);
 
     final String id = await catalog.createListing(
       const NewListing(
@@ -208,11 +212,13 @@ void main() {
       ),
     );
 
-    final String reportNo = await container.read(reportRepositoryProvider).file(
-      reportedProductId: 'product-0',
-      category: 'PENIPUAN',
-      description: 'Foto tidak sesuai.',
-    );
+    final String reportNo = await container
+        .read(reportRepositoryProvider)
+        .file(
+          reportedProductId: 'product-0',
+          category: 'PENIPUAN',
+          description: 'Foto tidak sesuai.',
+        );
     expect(reportNo, startsWith('RPT-'));
 
     await container.read(supportRepositoryProvider).close('ticket-1');

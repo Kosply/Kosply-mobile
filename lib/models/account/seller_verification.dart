@@ -68,4 +68,7 @@ class SellerVerification {
 
   /// @notice Whether a decision is still outstanding.
   bool get isPending => status == 'PENDING';
+
+  /// @notice Whether review refused the application.
+  bool get isRejected => status == 'REJECTED';
 }

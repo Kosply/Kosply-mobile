@@ -3,6 +3,8 @@
 /// @author Kosply-mobile
 library;
 
+import 'listing_proposal.dart';
+
 /// @title AiMessage
 /// @notice One bubble in an AI thread.
 class AiMessage {
@@ -19,6 +21,8 @@ class AiMessage {
     this.pending = false,
     this.thinking = '',
     this.needsApproval = false,
+    this.draft = '',
+    this.proposal,
   });
 
   /// @dev Stable identifier of the bubble.
@@ -38,6 +42,13 @@ class AiMessage {
 
   /// @dev True while a sensitive tool is waiting for approve or reject.
   final bool needsApproval;
+
+  /// @dev The chat line that will be sent if the student approves. Empty
+  /// once the decision is finished.
+  final String draft;
+
+  /// @dev Seller form the student can approve. Null for a chat message.
+  final ListingProposal? proposal;
 }
 
 /// @title AiThread

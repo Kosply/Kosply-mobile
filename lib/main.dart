@@ -13,6 +13,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/database/app_database.dart';
 import 'core/network/api_config.dart';
+import 'core/notifications/notification_watch.dart';
+import 'core/notifications/phone_notifications.dart';
+import 'core/notifications/plugin_phone_notifications.dart';
 import 'core/database/providers/database_provider.dart';
 import 'core/storage/providers/storage_providers.dart';
 import 'core/storage/stores/preferences_store.dart';
@@ -59,28 +62,24 @@ import 'widgets/ai/overlay/ai_overlay_layer.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiConfig.load();
+  final PluginPhoneNotifications notifications = PluginPhoneNotifications();
+  await notifications.prepare();
   final SecureStore secureStore = SecureStore();
-  final AuthSession? session = await SessionRepository.restoreFrom(
-    secureStore,
-  );
+  final AuthSession? session = await SessionRepository.restoreFrom(secureStore);
   final ProviderContainer container = ProviderContainer(
     overrides: [
-      preferencesStoreProvider.overrideWithValue(
-        await PreferencesStore.open(),
-      ),
+      preferencesStoreProvider.overrideWithValue(await PreferencesStore.open()),
       secureStoreProvider.overrideWithValue(secureStore),
       appDatabaseProvider.overrideWithValue(
         AppDatabase(AppDatabase.openDefault()),
       ),
-      sessionProvider.overrideWith(
-        () => SessionNotifier(initial: session),
-      ),
+      sessionProvider.overrideWith(() => SessionNotifier(initial: session)),
+      phoneNotificationsProvider.overrideWithValue(notifications),
     ],
   );
-  runApp(
-    UncontrolledProviderScope(container: container, child: const MyApp()),
-  );
+  runApp(UncontrolledProviderScope(container: container, child: const MyApp()));
   unawaited(container.read(appSyncProvider).syncAll());
+  unawaited(watchPhoneNotifications(container));
 }
 
 /// @title MyApp
@@ -111,8 +110,14 @@ class MyApp extends ConsumerWidget {
       theme: KosplyTheme.light,
       darkTheme: KosplyTheme.dark,
       themeMode: themeMode,
-      navigatorObservers: <NavigatorObserver>[aiRouteObserver],
-      home: const SplashScreen(),
+      navigatorObservers: <NavigatorObserver>[
+        aiRouteObserver,
+        aiOverlayNavigatorObserver,
+      ],
+      builder: (BuildContext context, Widget? child) {
+        return AiOverlayLayer(child: child ?? const SizedBox.shrink());
+      },
+      initialRoute: SplashScreen.routeName,
       routes: {
         SplashScreen.routeName: (_) => const SplashScreen(),
         RegisterScreen.routeName: (_) => const RegisterScreen(),
@@ -133,7 +138,8 @@ class MyApp extends ConsumerWidget {
         HelpDeskScreen.routeName: (_) => const HelpDeskScreen(),
         ContactSupportScreen.routeName: (_) => const ContactSupportScreen(),
         CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
-        NotificationInboxScreen.routeName: (_) => const NotificationInboxScreen(),
+        NotificationInboxScreen.routeName: (_) =>
+            const NotificationInboxScreen(),
         VerificationScreen.routeName: (_) => const VerificationScreen(),
       },
       // @dev Product view, see-all, and setting detail all need arguments, so
@@ -142,29 +148,36 @@ class MyApp extends ConsumerWidget {
         switch (settings.name) {
           case ProductViewScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) =>
                   ProductViewScreen(productId: settings.arguments! as String),
             );
           case SeeAllScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) => settings.arguments! as SeeAllScreen,
             );
           case SettingDetailScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) => settings.arguments! as SettingDetailScreen,
             );
           case SellerDetailScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) =>
                   SellerDetailScreen(sellerId: settings.arguments! as String),
             );
           case ChatDetailScreen.routeName:
             return MaterialPageRoute<void>(
-              builder: (_) =>
-                  ChatDetailScreen(conversationId: settings.arguments! as String),
+              settings: settings,
+              builder: (_) => ChatDetailScreen(
+                conversationId: settings.arguments! as String,
+              ),
             );
           case TicketDetailScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) =>
                   TicketDetailScreen(ticketId: settings.arguments! as String),
             );

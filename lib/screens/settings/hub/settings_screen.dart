@@ -10,7 +10,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../data/account/verification_repository.dart';
 import '../../../models/account/account_mode.dart';
+import '../../../models/account/seller_verification.dart';
 import '../../../models/auth/auth_session.dart';
 import '../../../providers/account/account_mode_provider.dart';
 import '../../../providers/account/session_provider.dart';
@@ -28,7 +30,7 @@ import '../../main/favorite/favorite_screen.dart';
 import '../../support/help/help_desk_screen.dart';
 import '../notifications/notification_inbox_screen.dart';
 import '../profile/profile_setting_screen.dart';
-import '../verification/verification_screen.dart';
+import '../verification/seller_welcome.dart';
 
 /// @title SettingsScreen
 /// @notice Settings hub shown on the Profil tab.
@@ -58,6 +60,34 @@ class SettingsScreen extends ConsumerWidget {
     final bool isDark = ref.watch(themeModeProvider) == ThemeMode.dark;
     final bool isSeller = mode == AccountMode.seller;
     final AuthSession? session = ref.watch(sessionProvider);
+    final AsyncValue<SellerVerification?>? application = isSeller
+        ? ref.watch(sellerVerificationProvider)
+        : null;
+    final bool approved = application?.asData?.value?.isApproved ?? false;
+
+    if (isSeller && !approved) {
+      return Scaffold(
+        backgroundColor: KosplyColors.backgroundOf(context),
+        body: UiBridgeScope(
+          screen: 'profile',
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SettingsHeading(title: 'Welcome'),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: Center(
+                    child: SellerWelcomeCard(application: application!),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
@@ -67,24 +97,7 @@ class SettingsScreen extends ConsumerWidget {
           key: const Key('settings-scroll'),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Setting',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: KosplyColors.textPrimaryOf(context),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const AccountModeSwitch(),
-              ],
-            ),
+            const _SettingsHeading(title: 'Setting'),
             const SizedBox(height: 6),
             Text(
               isSeller
@@ -162,12 +175,6 @@ class SettingsScreen extends ConsumerWidget {
                   description: 'Pesan dari chat, verifikasi, dan bantuan.',
                   onTap: () => NotificationInboxScreen.push(context),
                 ),
-                SettingsTile(
-                  icon: PhosphorCode.user,
-                  title: 'Verifikasi kampus',
-                  description: 'Kirim NIM dan foto KTM supaya bisa jual.',
-                  onTap: () => VerificationScreen.push(context),
-                ),
                 if (isSeller)
                   SettingsTile(
                     icon: PhosphorCode.chartBar,
@@ -201,6 +208,35 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// @dev Title row shared by seller settings and the welcome gate.
+class _SettingsHeading extends StatelessWidget {
+  const _SettingsHeading({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: KosplyColors.textPrimaryOf(context),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const AccountModeSwitch(),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 /// @title Catalog search field
-/// @notice Search pill bound to {catalogFilterProvider}, so typing and an
-/// `apply_filter` callback edit the same query.
+/// @notice Search pill on Home and Search.
+/// @dev Typing stays in the field. Enter opens the search catalogue. An
+/// `apply_filter` callback can still rewrite the text.
 /// @author Kosply-mobile
 library;
 
@@ -8,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ui_bridge/catalog_filter.dart';
+import '../../../screens/main/search/search_catalog_screen.dart';
 import 'searchbar.dart';
 
 /// @title CatalogSearchField
@@ -61,10 +63,24 @@ class _CatalogSearchFieldState extends ConsumerState<CatalogSearchField> {
       }
     });
     return KosplySearchbar(
+      key: const Key('catalog-search'),
       controller: _controller,
       focusNode: ref.watch(catalogSearchFocusProvider),
-      onChanged: (String value) =>
-          ref.read(catalogFilterProvider.notifier).setQuery(value),
+      showFilter: false,
+      onSubmitted: (String value) {
+        final String query = value.trim();
+        if (query.isEmpty) {
+          return;
+        }
+        FocusManager.instance.primaryFocus?.unfocus();
+        // The feed stays on the shared filter. Put that text back so the
+        // pill does not look like a live search after the results open.
+        final String bound = ref.read(catalogFilterProvider).query;
+        if (_controller.text != bound) {
+          _controller.text = bound;
+        }
+        SearchCatalogScreen.push(context, query);
+      },
     );
   }
 }

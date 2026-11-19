@@ -78,12 +78,14 @@ class RegisterEmailScreen extends ConsumerWidget {
       title: 'Where do you study?',
       hint: 'Universitas Indonesia 45',
       helper: 'Copy it exactly as your campus writes it.',
+      keyboardType: TextInputType.text,
       validator: FormValidators.campus(),
     ),
     FormStep(
       title: "What's your major?",
       hint: 'S1 Teknik Informatika',
       helper: 'Numbers and symbols like . and - are fine.',
+      keyboardType: TextInputType.text,
       validator: FormValidators.campus(example: 'S1 Teknik Informatika'),
     ),
   ];
@@ -103,8 +105,8 @@ class RegisterEmailScreen extends ConsumerWidget {
   /// last step is `POST /api/auth/register` with that code. The Google variant
   /// skips the mailbox and completes the shell account with
   /// `PATCH /api/users/me`. A taken email or username sends the form back to
-  /// that step. The student number is validated here but stored later, with
-  /// the seller verification (`POST /api/verifications`).
+  /// that step. The student number is kept on the device so verification can
+  /// send it without asking again.
   /// @param ref Riverpod handle.
   /// @param step Index of the submitted step.
   /// @param values One value per rendered step.
@@ -130,6 +132,7 @@ class RegisterEmailScreen extends ConsumerWidget {
             username: values[1].trim(),
             universitas: values[3].trim(),
             programStudi: values[4].trim(),
+            nim: values[2].trim(),
           );
         } else {
           await session.register(
@@ -140,6 +143,7 @@ class RegisterEmailScreen extends ConsumerWidget {
             universitas: values[6].trim(),
             programStudi: values[7].trim(),
             code: values[codeStep],
+            nim: values[5].trim(),
           );
         }
         await ref.read(appSyncProvider).syncAccount();
@@ -210,9 +214,7 @@ class RegisterEmailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AuthSession? session = ref.watch(sessionProvider);
     final bool prefillName =
-        googleFlow &&
-        session != null &&
-        session.displayName.isNotEmpty;
+        googleFlow && session != null && session.displayName.isNotEmpty;
 
     return SteppedForm(
       steps: googleFlow ? googleSteps : steps,
