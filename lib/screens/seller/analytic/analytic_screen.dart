@@ -1,5 +1,8 @@
 /// @title AnalyticScreen
-/// @notice Seller metrics plus catalogue sections spawned like Home.
+/// @notice Seller metrics plus the full shelf.
+/// @dev Tiles read `GET /api/analytics/seller` (last 30 days; saves are the
+/// current count). Trading, Paling diminati, and Hampir habis live on the
+/// Jual tab. "Semua product kamu" stays here, and an empty shelf shows a card.
 /// @author Kosply-mobile
 library;
 
@@ -8,12 +11,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../models/catalog/seller_analytics.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/catalog/seller_analytics_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
 import '../../../widgets/common/headings/section_heading.dart';
 import '../../../widgets/seller/appbar/seller_app_bar.dart';
-import '../../main/home/see_all_screen.dart';
 
 /// @title AnalyticScreen
 /// @notice Analytic destination opened from Settings or Jual.
@@ -25,16 +32,33 @@ class AnalyticScreen extends ConsumerWidget {
   /// @dev Named route for this screen.
   static const routeName = '/analytic';
 
-  /// @dev Signed-in student whose metrics are shown.
-  static const String sellerId = 'seller-1';
+  /// @notice Tiles for [analytics]; dashes while it loads or failed.
+  /// @param analytics Numbers from the backend, or null.
+  /// @return Heading and value per tile.
+  static List<(String, String)> metricsFor(SellerAnalytics? analytics) {
+    String count(int? value) => value == null ? '–' : _grouped(value);
+    return <(String, String)>[
+      ('Views', count(analytics?.views)),
+      ('Favorite', count(analytics?.favorites)),
+      ('Chat', count(analytics?.chats)),
+      ('Terjual', count(analytics?.sold)),
+    ];
+  }
 
-  /// @dev Placeholder metric tiles: heading plus a left-aligned number.
-  static const List<(String, String)> metrics = <(String, String)>[
-    ('Views', '1.284'),
-    ('Favorite', '46'),
-    ('Chat', '18'),
-    ('Terjual', '7'),
-  ];
+  /// @notice Thousands with dots, e.g. 1284 → 1.284.
+  /// @param value Count.
+  /// @return The grouped digits.
+  static String _grouped(int value) {
+    final String digits = value.toString();
+    final StringBuffer out = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        out.write('.');
+      }
+      out.write(digits[i]);
+    }
+    return out.toString();
+  }
 
   /// @notice Pushes this screen onto the current route stack.
   /// @param context The build context.
@@ -43,27 +67,19 @@ class AnalyticScreen extends ConsumerWidget {
     return Navigator.of(context).pushNamed(routeName);
   }
 
-  void _openSeeAll(BuildContext context, String title, List<Product> items) {
-    SeeAllScreen.push(context, title: title, items: items);
-  }
-
-  /// @notice Builds the metric grid and catalogue sections.
+  /// @notice Builds the metric grid and the shelf.
   /// @param context The build context.
   /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final String sellerId = ref.watch(currentUserIdProvider);
+    ref.watch(sellerSyncProvider(sellerId));
+    final SellerAnalytics? analytics = ref.watch(sellerAnalyticsProvider).value;
+    final List<(String, String)> metrics = metricsFor(analytics);
     final Seller? seller = ref.watch(sellerProvider(sellerId)).value;
     final List<Product> listed =
         ref.watch(sellerProductsProvider(sellerId)).value ?? const <Product>[];
-    final List<Product> all =
-        ref.watch(catalogProductsProvider).value ?? const <Product>[];
-    final List<Product> trading = listed.isEmpty
-        ? all.take(4).toList()
-        : listed.take(4).toList();
-    final List<Product> popular = all.take(4).toList();
-    final List<Product> lowStock = all.skip(4).take(4).toList();
-    final List<Product> recent = all.reversed.take(4).toList();
 
     if (seller == null) {
       return Scaffold(
@@ -81,38 +97,16 @@ class AnalyticScreen extends ConsumerWidget {
         children: [
           _MetricGrid(metrics: metrics),
           const SizedBox(height: 24),
-          SectionHeading(
-            'Trading product kamu',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Trading product kamu', trading),
-          ),
+          const SectionHeading('Semua product kamu'),
           const SizedBox(height: 12),
-          ProductGrid(items: trading),
-          const SizedBox(height: 24),
-          SectionHeading(
-            'Paling diminati',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Paling diminati', all),
-          ),
-          const SizedBox(height: 12),
-          ProductGrid(items: popular),
-          const SizedBox(height: 24),
-          SectionHeading(
-            'Hampir habis',
-            actionLabel: 'Lihat semua',
-            onTap: () => _openSeeAll(context, 'Hampir habis', all),
-          ),
-          const SizedBox(height: 12),
-          ProductGrid(items: lowStock),
-          const SizedBox(height: 24),
-          SectionHeading(
-            'Baru dilihat',
-            actionLabel: 'Lihat semua',
-            onTap: () =>
-                _openSeeAll(context, 'Baru dilihat', all.reversed.toList()),
-          ),
-          const SizedBox(height: 12),
-          ProductGrid(items: recent),
+          if (listed.isEmpty)
+            const EmptyStateCard(
+              key: Key('analytic-empty-shelf'),
+              icon: PhosphorCode.package,
+              message: 'Belum ada barang yang kamu pasang.',
+            )
+          else
+            ProductGrid(items: listed.take(4).toList()),
         ],
       ),
     );

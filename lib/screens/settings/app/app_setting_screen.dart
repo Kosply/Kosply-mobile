@@ -17,6 +17,7 @@ import '../../../widgets/seller/identity/seller_avatar.dart';
 import '../../../widgets/settings/card/settings_section_card.dart';
 import '../../../widgets/settings/tile/settings_tile.dart';
 import '../../auth/forgot_password/forgot_password_screen.dart';
+import '../notifications/notification_inbox_screen.dart';
 import '../profile/profile_setting_screen.dart';
 import '../../auth/onboarding/splash_screen.dart';
 
@@ -156,6 +157,45 @@ class AppSettingScreen extends ConsumerWidget {
                         .read(notificationSettingsProvider.notifier)
                         .setTransaction(value),
                   ),
+                if (personalized)
+                  _channelTile(
+                    icon: PhosphorCode.user,
+                    title: 'Verifikasi',
+                    description: 'Hasil review KTM.',
+                    value: notes.verification,
+                    fieldKey: const Key('notify-verification'),
+                    onChanged: (bool value) => ref
+                        .read(notificationSettingsProvider.notifier)
+                        .setVerification(value),
+                  ),
+                if (personalized)
+                  _channelTile(
+                    icon: PhosphorCode.megaphone,
+                    title: 'Laporan',
+                    description: 'Hasil laporan yang kamu kirim.',
+                    value: notes.reports,
+                    fieldKey: const Key('notify-reports'),
+                    onChanged: (bool value) => ref
+                        .read(notificationSettingsProvider.notifier)
+                        .setReports(value),
+                  ),
+                if (personalized)
+                  _channelTile(
+                    icon: PhosphorCode.headset,
+                    title: 'Bantuan',
+                    description: 'Balasan tim Kosply.',
+                    value: notes.support,
+                    fieldKey: const Key('notify-support'),
+                    onChanged: (bool value) => ref
+                        .read(notificationSettingsProvider.notifier)
+                        .setSupport(value),
+                  ),
+                SettingsTile(
+                  icon: PhosphorCode.bell,
+                  title: 'Kotak notifikasi',
+                  description: 'Pesan dari chat, verifikasi, dan bantuan.',
+                  onTap: () => NotificationInboxScreen.push(context),
+                ),
                 SettingsTile(
                   icon: PhosphorCode.lockSimple,
                   title: 'Ganti password',

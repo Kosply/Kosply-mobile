@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Kosply memakai kamera untuk memotret barang yang mau kamu jual.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kosply memakai lokasimu untuk menampilkan nama tempat di Home.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

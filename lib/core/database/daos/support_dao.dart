@@ -142,4 +142,18 @@ class SupportDao extends DatabaseAccessor<AppDatabase> with _$SupportDaoMixin {
       });
     });
   }
+
+  /// @notice Merges tickets and bubbles into the cache.
+  /// @param tickets Ticket companions.
+  /// @param bubbles Message companions.
+  /// @return Future completing when the batch is durable.
+  Future<void> upsertTickets({
+    List<SupportTicketsCompanion> tickets = const <SupportTicketsCompanion>[],
+    List<SupportMessagesCompanion> bubbles = const <SupportMessagesCompanion>[],
+  }) {
+    return batch((Batch batch) {
+      batch.insertAllOnConflictUpdate(supportTickets, tickets);
+      batch.insertAllOnConflictUpdate(supportMessages, bubbles);
+    });
+  }
 }

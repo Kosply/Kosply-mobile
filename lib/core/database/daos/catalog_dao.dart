@@ -139,7 +139,9 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
 
   /// @notice Replaces the whole catalogue atomically.
   /// @dev Wraps the delete and the bulk insert in one transaction so a failed
-  /// refresh never leaves a half-written catalogue behind.
+  /// refresh never leaves a half-written catalogue behind. Sellers are merged,
+  /// not replaced: a card carries only public seller columns, and replacing
+  /// the row used to wipe the signed-in seller's own `isMe` profile.
   /// @param userRows User companions to store.
   /// @param productRows Product companions to store.
   /// @param fetchedAt UTC millis of this refresh.
@@ -152,10 +154,87 @@ class CatalogDao extends DatabaseAccessor<AppDatabase> with _$CatalogDaoMixin {
     return transaction(() async {
       await delete(products).go();
       await batch((Batch batch) {
-        batch.insertAll(users, userRows, mode: InsertMode.insertOrReplace);
+        batch.insertAllOnConflictUpdate(users, userRows);
         batch.insertAll(products, productRows);
       });
     });
+  }
+
+  /// @notice Merges products and their sellers into the cache.
+  /// @dev Only the columns present in each companion are written, so a list
+  /// card (no description) never erases a description a detail fetch stored.
+  /// @param userRows User companions to merge.
+  /// @param productRows Product companions to merge.
+  /// @return Future completing when the batch is durable.
+  /// @notice Drops one cached product, for example after it is archived or sold.
+  /// @param id Product id.
+  /// @return Future completing when the row is gone.
+  Future<void> removeProduct(String id) {
+    return (delete(products)..where((Products row) => row.id.equals(id))).go();
+  }
+
+  Future<void> upsertCatalog({
+    List<UsersCompanion> userRows = const <UsersCompanion>[],
+    List<ProductsCompanion> productRows = const <ProductsCompanion>[],
+  }) {
+    return batch((Batch batch) {
+      batch.insertAllOnConflictUpdate(users, userRows);
+      batch.insertAllOnConflictUpdate(products, productRows);
+    });
+  }
+
+  /// @notice Replaces the saved-product ids with the server's list.
+  /// @param productIds Saved ids, newest save first.
+  /// @param savedAt UTC millis per id, same order.
+  /// @return Future completing when the transaction is durable.
+  Future<void> replaceFavorites({
+    required List<String> productIds,
+    required List<int> savedAt,
+  }) {
+    return transaction(() async {
+      await delete(favorites).go();
+      await batch((Batch batch) {
+        batch.insertAll(favorites, <FavoritesCompanion>[
+          for (int i = 0; i < productIds.length; i++)
+            FavoritesCompanion.insert(
+              productId: productIds[i],
+              createdAt: savedAt[i],
+            ),
+        ], mode: InsertMode.insertOrReplace);
+      });
+    });
+  }
+
+  /// @notice Saves or unsaves one product locally.
+  /// @param productId Catalogue item id.
+  /// @param saved Whether the item is saved.
+  /// @param createdAt UTC millis stamped on a new save.
+  /// @return Future completing when the write is durable.
+  Future<void> setFavorite({
+    required String productId,
+    required bool saved,
+    required int createdAt,
+  }) async {
+    if (!saved) {
+      await (delete(favorites)
+            ..where(($FavoritesTable row) => row.productId.equals(productId)))
+          .go();
+      return;
+    }
+    await into(favorites).insert(
+      FavoritesCompanion.insert(productId: productId, createdAt: createdAt),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  /// @notice Whether a product is saved locally.
+  /// @param productId Catalogue item id.
+  /// @return True when a favorite row exists.
+  Future<bool> isFavorite(String productId) async {
+    final FavoriteRow? row = await (select(favorites)
+          ..where(($FavoritesTable row) => row.productId.equals(productId)))
+        .getSingleOrNull();
+    return row != null;
   }
 
   /// @notice Streams the saved products with their seller attached.

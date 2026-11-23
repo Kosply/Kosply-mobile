@@ -6,13 +6,19 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/providers/database_provider.dart';
+import '../../core/network/api_exception.dart';
 import '../../data/catalog/catalog_repository.dart';
 import '../../models/catalog/product.dart';
 import '../../models/catalog/seller.dart';
+import '../network/api_provider.dart';
+import 'catalog_events.dart';
 
 /// @dev Catalogue repository backed by the Drift cache.
 final catalogRepositoryProvider = Provider<CatalogRepository>(
-  (ref) => CatalogRepository(dao: ref.watch(appDatabaseProvider).catalogDao),
+  (ref) => CatalogRepository(
+    dao: ref.watch(appDatabaseProvider).catalogDao,
+    api: ref.watch(apiClientProvider),
+  ),
 );
 
 /// @dev Every cached product with its seller attached, in backend order.
@@ -45,4 +51,45 @@ final favoriteProductsProvider = StreamProvider<List<Product>>(
 /// @dev The saved product ids, oldest saved first.
 final favoriteIdsProvider = StreamProvider<Set<String>>(
   (ref) => ref.watch(catalogRepositoryProvider).watchFavoriteIds(),
+);
+
+/// @notice Runs a refresh and ignores backend or network failures.
+/// @dev Screens watch the cache, so a failed refresh only means the last good
+/// copy stays on screen; nothing to surface.
+/// @param refresh The repository refresh.
+/// @return Future completing when it settled.
+Future<void> refreshQuietly(Future<void> Function() refresh) async {
+  try {
+    await refresh();
+  } on ApiException {
+    return;
+  }
+}
+
+/// @dev Re-reads the public catalogue each time Home or Search is shown.
+final catalogSyncProvider = FutureProvider.autoDispose<void>(
+  (ref) => refreshQuietly(ref.read(catalogRepositoryProvider).refresh),
+);
+
+/// @dev Pulls one product's detail when it is opened, and records the click.
+final productSyncProvider = FutureProvider.autoDispose.family<void, String>((
+  ref,
+  String id,
+) async {
+  await refreshQuietly(
+    () => ref.read(catalogRepositoryProvider).refreshProduct(id),
+  );
+  ref.read(catalogEventsProvider).click(id);
+});
+
+/// @dev Pulls a seller's profile and shelf when it is opened.
+final sellerSyncProvider = FutureProvider.autoDispose.family<void, String>(
+  (ref, String sellerId) => refreshQuietly(
+    () => ref.read(catalogRepositoryProvider).refreshSeller(sellerId),
+  ),
+);
+
+/// @dev Re-reads the saved list when the favorites screen is shown.
+final favoritesSyncProvider = FutureProvider.autoDispose<void>(
+  (ref) => refreshQuietly(ref.read(catalogRepositoryProvider).refreshFavorites),
 );

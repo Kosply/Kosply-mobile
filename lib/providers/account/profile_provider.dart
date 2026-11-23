@@ -1,47 +1,51 @@
 /// @title Profile provider
-/// @notice Holds the signed-in student's editable profile.
-/// @dev Backed by the Drift cache; saves write the `isMe` row through the
-/// {AccountRepository} so every listener updates at once.
+/// @notice The signed-in student's profile for the app bar, settings and Jual.
+/// @dev Streams the cached `users` row flagged `isMe`; {ProfileNotifier.save}
+/// writes through `PATCH /api/users/me` and the cache follows the server.
 /// @author Kosply-mobile
 library;
-
-import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/providers/database_provider.dart';
 import '../../data/account/account_repository.dart';
 import '../../models/account/user_profile.dart';
+import '../network/api_provider.dart';
 
-/// @dev Profile repository backed by the Drift cache.
+/// @dev Profile cache plus the `/api/users/me` calls.
 final accountRepositoryProvider = Provider<AccountRepository>(
-  (ref) => AccountRepository(dao: ref.watch(appDatabaseProvider).accountDao),
+  (ref) => AccountRepository(
+    dao: ref.watch(appDatabaseProvider).accountDao,
+    api: ref.watch(apiClientProvider),
+  ),
 );
 
-/// @dev The cached profile stream.
+/// @dev Cached profile stream.
 final profileStreamProvider = StreamProvider<UserProfile>(
   (ref) => ref.watch(accountRepositoryProvider).watchProfile(),
 );
 
 /// @title ProfileNotifier
-/// @notice Mirrors the cached profile and forwards saves to the repository.
+/// @notice Latest profile value plus the save action.
 class ProfileNotifier extends Notifier<UserProfile> {
-  /// @notice Follows the cached profile.
-  /// @return The current profile, empty before the first save.
+  /// @notice Mirrors the cached profile.
+  /// @return The profile, empty before the first sync.
   @override
   UserProfile build() {
     return ref.watch(profileStreamProvider).value ?? const UserProfile();
   }
 
-  /// @notice Replaces the saved profile.
-  /// @param profile Fields to keep.
-  /// @return void
-  void save(UserProfile profile) {
-    unawaited(ref.read(accountRepositoryProvider).saveProfile(profile));
+  /// @notice Saves the edited profile through the backend.
+  /// @dev Throws {ApiException} when the server refuses, e.g. a taken
+  /// username, so the settings screen can keep the form open and explain.
+  /// @param profile Edited profile.
+  /// @return Future completing when the server accepted it.
+  Future<void> save(UserProfile profile) {
+    return ref.read(accountRepositoryProvider).saveProfile(profile);
   }
 }
 
-/// @dev Profile view of the cache, refreshed whenever the row changes.
+/// @dev Global profile provider.
 final profileProvider = NotifierProvider<ProfileNotifier, UserProfile>(
   ProfileNotifier.new,
 );

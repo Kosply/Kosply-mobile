@@ -1,21 +1,32 @@
 /// @title ProductViewScreen
 /// @notice Detail view of a single catalogue item.
 /// @dev Receives only a product id and resolves the rest through the cached
-/// catalogue. The hero and the thumbnail strip stay in sync.
-/// Chat sits in a pinned bar so the title and price can read as a block.
+/// catalogue, refreshed from `GET /api/products/:id` on open. The hero and the
+/// thumbnail strip stay in sync. Chat sits in a pinned bar so the title and
+/// price can read as a block; it opens (or reuses) the buyer's room for this
+/// product through `POST /api/conversations`.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/location/nearby.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/ui_bridge/ui_bridge.dart';
 import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../core/ui_bridge/ui_ids.dart';
 import '../../../models/catalog/product.dart';
 import '../../../models/catalog/seller.dart';
+import '../../../models/catalog/product_stats.dart';
+import '../../../providers/account/session_provider.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/location/location_label_provider.dart';
 import '../../../providers/catalog/favorites_provider.dart';
+import '../../../providers/catalog/seller_analytics_provider.dart';
+import '../../../providers/inbox/inbox_providers.dart';
+import '../../reports/report_sheet.dart';
+import 'product_actions.dart';
 import '../../../theme/colors/kosply_colors.dart';
 import '../../../widgets/seller/chat/chat_seller_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
@@ -24,6 +35,8 @@ import '../../../widgets/common/headings/section_heading.dart';
 import '../../../widgets/seller/identity/seller_identity.dart';
 import '../../main/inbox/chat_detail_screen.dart';
 import '../detail/seller_detail_screen.dart';
+import '../../../widgets/ai/overlay/ai_overlay_layer.dart';
+import '../../../widgets/common/images/kosply_image.dart';
 
 /// @title ProductViewScreen
 /// @notice Product detail screen.
@@ -47,101 +60,168 @@ class ProductViewScreen extends ConsumerWidget {
     return Navigator.of(context).pushNamed(routeName, arguments: productId);
   }
 
+  /// @notice Opens the buyer's room for this product, then the chat.
+  /// @param context The build context.
+  /// @param ref Riverpod handle.
+  /// @return Future completing when navigation starts.
+  Future<void> _openChat(BuildContext context, WidgetRef ref) async {
+    final String roomId;
+    try {
+      roomId = await ref
+          .read(inboxRepositoryProvider)
+          .openForProduct(productId);
+    } on ApiException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.userMessage)));
+      }
+      return;
+    }
+    if (context.mounted && roomId.isNotEmpty) {
+      await ChatDetailScreen.push(context, roomId);
+    }
+  }
+
   /// @notice Builds the product detail.
   /// @param context The build context.
   /// @param ref Riverpod handle.
   /// @return The screen widget.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(productSyncProvider(productId));
     final Product? product = ref.watch(catalogProductProvider(productId)).value;
     if (product == null) {
       return const _MissingProduct();
     }
-    final List<Product> related =
-        ref
-            .watch(catalogProductsProvider)
-            .value
-            ?.where((Product item) => item.id != productId)
-            .take(4)
-            .toList() ??
-        const <Product>[];
+    final List<Product> related = nearestFirst(
+      ref
+              .watch(catalogProductsProvider)
+              .value
+              ?.where((Product item) => item.id != productId)
+              .toList() ??
+          const <Product>[],
+      fix: ref.watch(deviceFixProvider),
+    ).take(4).toList();
+    final bool mine =
+        product.sellerId.isNotEmpty &&
+        product.sellerId == ref.watch(currentUserIdProvider);
+    final ProductStats? stats = mine
+        ? ref.watch(productStatsProvider(productId)).value
+        : null;
 
-    return Scaffold(
-      backgroundColor: KosplyColors.backgroundOf(context),
-      appBar: AppBar(
+    return RouteGapHost(
+      gap: kBottomBarGap,
+      child: Scaffold(
         backgroundColor: KosplyColors.backgroundOf(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: PhosphorGlyph(
-            PhosphorCode.arrowLeft,
-            size: 20,
-            color: KosplyColors.textPrimaryOf(context),
-          ),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        actions: [
-          _FavoriteButton(productId: productId),
-          _ActionButton(
-            codePoint: PhosphorCode.dotsThree,
-            weight: PhosphorWeight.bold,
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: UiBridgeScope(
-        screen: 'product_view',
-        elements: <UiElement>[
-          UiElement.product(product.id, label: product.title),
-          UiElement.button(
-            'chat',
-            label: 'Chat penjual',
-            target: product.sellerId,
-            callback: UiCallbacks.openChat,
-            args: <String, Object?>{'sellerId': product.sellerId},
-          ),
-          UiElement.button('favorite', label: 'Simpan', target: product.id),
-        ],
-        child: ListView(
-          key: const Key('product-detail-scroll'),
-          children: [
-            _ProductGallery(product: product),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _TitlePriceBlock(product: product),
-                  const SizedBox(height: 16),
-                  _DescriptionBlock(description: product.description),
-                  const SizedBox(height: 8),
-                  _InfoBlock(product: product),
-                  const SizedBox(height: 16),
-                  _SellerBlock(
-                    product: product,
-                    onTap: () =>
-                        SellerDetailScreen.push(context, product.sellerId),
-                  ),
-                  const SizedBox(height: 24),
-                  const SectionHeading('Rekomendasi'),
-                  const SizedBox(height: 12),
-                  ProductGrid(items: related),
-                ],
-              ),
+        appBar: AppBar(
+          backgroundColor: KosplyColors.backgroundOf(context),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: PhosphorGlyph(
+              PhosphorCode.arrowLeft,
+              size: 20,
+              color: KosplyColors.textPrimaryOf(context),
             ),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          actions: [
+            _FavoriteButton(productId: productId),
+            IconButton(
+              key: const Key('product-more'),
+              icon: PhosphorGlyph(
+                PhosphorCode.dotsThree,
+                weight: PhosphorWeight.bold,
+                size: 20,
+                color: KosplyColors.textPrimaryOf(context),
+              ),
+              onPressed: () async {
+                if (mine) {
+                  final bool gone = await showListingActions(
+                    context,
+                    ref,
+                    product,
+                  );
+                  if (gone && context.mounted) {
+                    Navigator.of(context).maybePop();
+                  }
+                  return;
+                }
+                await showReportSheet(
+                  context,
+                  productId: product.id,
+                  userId: product.sellerId,
+                );
+              },
+            ),
+            const SizedBox(width: 4),
           ],
         ),
-      ),
-      bottomNavigationBar: ChatSellerBar(
-        onPressed: () {
-          ref
-              .read(uiBridgeProvider.notifier)
-              .recordClick(
-                id: UiIds.button('chat', target: product.sellerId),
-                kind: UiElementKinds.button,
-              );
-          ChatDetailScreen.push(context, product.sellerId);
-        },
+        body: UiBridgeScope(
+          screen: 'product_view',
+          elements: <UiElement>[
+            UiElement.product(product.id, label: product.title),
+            UiElement.button(
+              'chat',
+              label: 'Chat penjual',
+              target: product.sellerId,
+              callback: UiCallbacks.openChat,
+              args: <String, Object?>{'sellerId': product.sellerId},
+            ),
+            UiElement.button('favorite', label: 'Simpan', target: product.id),
+          ],
+          child: ListView(
+            key: const Key('product-detail-scroll'),
+            children: [
+              _ProductGallery(product: product),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TitlePriceBlock(product: product),
+                    if (stats != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '${stats.impressions} dilihat · ${stats.clicks} diklik · ${stats.inquiries} chat · ${stats.favorites} favorit',
+                        key: const Key('product-stats'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: KosplyColors.textSecondaryOf(context),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    _DescriptionBlock(description: product.description),
+                    const SizedBox(height: 8),
+                    _InfoBlock(product: product),
+                    const SizedBox(height: 16),
+                    _SellerBlock(
+                      product: product,
+                      onTap: () =>
+                          SellerDetailScreen.push(context, product.sellerId),
+                    ),
+                    const SizedBox(height: 24),
+                    const SectionHeading('Rekomendasi'),
+                    const SizedBox(height: 12),
+                    ProductGrid(items: related, eventSource: 'detail'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: ChatSellerBar(
+          onPressed: () {
+            ref
+                .read(uiBridgeProvider.notifier)
+                .recordClick(
+                  id: UiIds.button('chat', target: product.sellerId),
+                  kind: UiElementKinds.button,
+                );
+            _openChat(context, ref);
+          },
+        ),
       ),
     );
   }
@@ -199,32 +279,15 @@ class _FavoriteButton extends ConsumerWidget {
               id: UiIds.button('favorite', target: productId),
               kind: UiElementKinds.button,
             );
-        ref.read(favoritesProvider.notifier).toggle(productId);
+        ref.read(favoritesProvider.notifier).toggle(productId).catchError((
+          Object error,
+        ) {
+          if (error is ApiException && context.mounted) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(error.userMessage)));
+          }
+        });
       },
-    );
-  }
-}
-
-/// @dev App bar icon button driven by a Phosphor code point.
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.codePoint,
-    this.weight = PhosphorWeight.regular,
-  });
-
-  final int codePoint;
-  final PhosphorWeight weight;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      icon: PhosphorGlyph(
-        codePoint,
-        weight: weight,
-        size: 20,
-        color: KosplyColors.textPrimaryOf(context),
-      ),
-      onPressed: () {},
     );
   }
 }
@@ -281,11 +344,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
             itemCount: images.length,
             onPageChanged: (int index) => setState(() => _index = index),
             itemBuilder: (BuildContext context, int index) {
-              return Image.asset(
-                images[index],
-                fit: BoxFit.cover,
-                width: double.infinity,
-              );
+              return KosplyImage(images[index], width: double.infinity);
             },
           ),
         ),
@@ -320,7 +379,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
                     padding: const EdgeInsets.all(2),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(images[index], fit: BoxFit.cover),
+                      child: KosplyImage(images[index]),
                     ),
                   ),
                 );
@@ -410,7 +469,7 @@ class _DescriptionBlock extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          description.isEmpty ? Product.loremIpsum : description,
+          description.isEmpty ? 'Belum ada deskripsi.' : description,
           style: TextStyle(
             fontSize: 13,
             height: 1.5,

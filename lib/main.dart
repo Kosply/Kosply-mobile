@@ -6,22 +6,28 @@
 /// @author Kosply-mobile
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/database/app_database.dart';
+import 'core/network/api_config.dart';
+import 'core/notifications/notification_watch.dart';
+import 'core/notifications/phone_notifications.dart';
+import 'core/notifications/plugin_phone_notifications.dart';
 import 'core/database/providers/database_provider.dart';
 import 'core/storage/providers/storage_providers.dart';
 import 'core/storage/stores/preferences_store.dart';
 import 'core/storage/stores/secure_store.dart';
 import 'data/account/session_repository.dart';
-import 'data/shared/app_seeder.dart';
 import 'layouts/main_layout.dart';
 import 'models/auth/auth_session.dart';
 import 'providers/account/session_provider.dart';
-import 'providers/seed/app_seeder_provider.dart';
 import 'providers/settings/theme_mode_provider.dart';
+import 'providers/sync/app_sync_provider.dart';
 import 'screens/seller/product/add_product_screen.dart';
+import 'screens/seller/product/product_camera_screen.dart';
 import 'screens/settings/app/app_setting_screen.dart';
 import 'screens/seller/analytic/analytic_screen.dart';
 import 'screens/main/inbox/chat_detail_screen.dart';
@@ -40,40 +46,40 @@ import 'screens/main/home/see_all_screen.dart';
 import 'screens/seller/detail/seller_detail_screen.dart';
 import 'screens/settings/app/setting_detail_screen.dart';
 import 'screens/settings/hub/settings_screen.dart';
+import 'screens/settings/notifications/notification_inbox_screen.dart';
+import 'screens/settings/verification/verification_screen.dart';
 import 'screens/support/ticket/ticket_detail_screen.dart';
 import 'screens/auth/onboarding/splash_screen.dart';
 import 'theme/app/kosply_theme.dart';
+import 'widgets/ai/overlay/ai_overlay_layer.dart';
 
 /// @notice Starts the Flutter application.
 /// @dev Opens the platform stores and database, restores the session from the
-/// keystore, fills the offline-first cache, then runs the app inside an
-/// {UncontrolledProviderScope} so the first frame already has data.
+/// keystore, then runs the app inside an {UncontrolledProviderScope}. The
+/// first frame shows the cached data; {AppSync} refreshes it from the backend
+/// right after, so a phone without network still opens instantly.
 /// @return Future completing when the app is running.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiConfig.load();
+  final PluginPhoneNotifications notifications = PluginPhoneNotifications();
+  await notifications.prepare();
   final SecureStore secureStore = SecureStore();
-  final AuthSession? session = await SessionRepository(
-    secure: secureStore,
-  ).restore();
+  final AuthSession? session = await SessionRepository.restoreFrom(secureStore);
   final ProviderContainer container = ProviderContainer(
     overrides: [
-      preferencesStoreProvider.overrideWithValue(
-        await PreferencesStore.open(),
-      ),
+      preferencesStoreProvider.overrideWithValue(await PreferencesStore.open()),
       secureStoreProvider.overrideWithValue(secureStore),
       appDatabaseProvider.overrideWithValue(
         AppDatabase(AppDatabase.openDefault()),
       ),
-      sessionProvider.overrideWith(
-        () => SessionNotifier(initial: session),
-      ),
+      sessionProvider.overrideWith(() => SessionNotifier(initial: session)),
+      phoneNotificationsProvider.overrideWithValue(notifications),
     ],
   );
-  final AppSeeder seeder = container.read(appSeederProvider);
-  await seeder.seedIfEmpty();
-  runApp(
-    UncontrolledProviderScope(container: container, child: const MyApp()),
-  );
+  runApp(UncontrolledProviderScope(container: container, child: const MyApp()));
+  unawaited(container.read(appSyncProvider).syncAll());
+  unawaited(watchPhoneNotifications(container));
 }
 
 /// @title MyApp
@@ -104,7 +110,14 @@ class MyApp extends ConsumerWidget {
       theme: KosplyTheme.light,
       darkTheme: KosplyTheme.dark,
       themeMode: themeMode,
-      home: const SplashScreen(),
+      navigatorObservers: <NavigatorObserver>[
+        aiRouteObserver,
+        aiOverlayNavigatorObserver,
+      ],
+      builder: (BuildContext context, Widget? child) {
+        return AiOverlayLayer(child: child ?? const SizedBox.shrink());
+      },
+      initialRoute: SplashScreen.routeName,
       routes: {
         SplashScreen.routeName: (_) => const SplashScreen(),
         RegisterScreen.routeName: (_) => const RegisterScreen(),
@@ -118,12 +131,16 @@ class MyApp extends ConsumerWidget {
         SettingsScreen.routeName: (_) => const SettingsScreen(),
         ProfileSettingScreen.routeName: (_) => const ProfileSettingScreen(),
         AppSettingScreen.routeName: (_) => const AppSettingScreen(),
+        ProductCameraScreen.routeName: (_) => const ProductCameraScreen(),
         AddProductScreen.routeName: (_) => const AddProductScreen(),
         FavoriteScreen.routeName: (_) => const FavoriteScreen(),
         AnalyticScreen.routeName: (_) => const AnalyticScreen(),
         HelpDeskScreen.routeName: (_) => const HelpDeskScreen(),
         ContactSupportScreen.routeName: (_) => const ContactSupportScreen(),
         CreateTicketScreen.routeName: (_) => const CreateTicketScreen(),
+        NotificationInboxScreen.routeName: (_) =>
+            const NotificationInboxScreen(),
+        VerificationScreen.routeName: (_) => const VerificationScreen(),
       },
       // @dev Product view, see-all, and setting detail all need arguments, so
       // @dev they are generated instead of registered in the table above.
@@ -131,29 +148,36 @@ class MyApp extends ConsumerWidget {
         switch (settings.name) {
           case ProductViewScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) =>
                   ProductViewScreen(productId: settings.arguments! as String),
             );
           case SeeAllScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) => settings.arguments! as SeeAllScreen,
             );
           case SettingDetailScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) => settings.arguments! as SettingDetailScreen,
             );
           case SellerDetailScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) =>
                   SellerDetailScreen(sellerId: settings.arguments! as String),
             );
           case ChatDetailScreen.routeName:
             return MaterialPageRoute<void>(
-              builder: (_) =>
-                  ChatDetailScreen(sellerId: settings.arguments! as String),
+              settings: settings,
+              builder: (_) => ChatDetailScreen(
+                conversationId: settings.arguments! as String,
+              ),
             );
           case TicketDetailScreen.routeName:
             return MaterialPageRoute<void>(
+              settings: settings,
               builder: (_) =>
                   TicketDetailScreen(ticketId: settings.arguments! as String),
             );

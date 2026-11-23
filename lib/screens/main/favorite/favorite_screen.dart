@@ -6,12 +6,17 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/location/nearby.dart';
 import '../../../models/catalog/product.dart';
 import '../../../providers/catalog/catalog_providers.dart';
+import '../../../providers/location/location_label_provider.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
 import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/product/grid/product_grid.dart';
+import '../../../core/ui_bridge/ui_bridge.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../widgets/common/search/searchbar.dart';
 
 /// @title FavoriteScreen
@@ -82,13 +87,18 @@ class _FavoriteScreenState extends ConsumerState<FavoriteScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.watch(favoritesSyncProvider);
     final List<Product> saved =
         ref.watch(favoriteProductsProvider).value ?? const <Product>[];
     final List<String> chips = _chipLabels(saved);
     final String filter = chips.contains(_filter)
         ? _filter
         : FavoriteScreen.filterAll;
-    final List<Product> visible = _visible(saved, filter);
+    final List<Product> visible = nearestFirst(
+      _visible(saved, filter),
+      fix: ref.watch(deviceFixProvider),
+      keepFar: true,
+    );
     final Color onShell = KosplyColors.textPrimaryOf(context);
 
     return Scaffold(
@@ -110,41 +120,41 @@ class _FavoriteScreenState extends ConsumerState<FavoriteScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          KosplySearchbar(
-            key: const Key('favorite-search'),
-            hint: 'Cari favorite...',
-            showFilter: false,
-            onChanged: (String value) {
-              setState(() => _query = value);
-            },
-          ),
-          const SizedBox(height: 16),
-          FilterChipBar(
-            labels: chips,
-            selected: filter,
-            onSelected: (String label) => setState(() => _filter = label),
-          ),
-          const SizedBox(height: 16),
-          if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                saved.isEmpty
+      body: UiBridgeScope(
+        screen: 'favorite',
+        elements: <UiElement>[
+          for (final Product item in visible.take(24))
+            UiElement.product(item.id, label: item.title),
+        ],
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+          children: [
+            KosplySearchbar(
+              key: const Key('favorite-search'),
+              hint: 'Cari favorite...',
+              showFilter: false,
+              onChanged: (String value) {
+                setState(() => _query = value);
+              },
+            ),
+            const SizedBox(height: 16),
+            FilterChipBar(
+              labels: chips,
+              selected: filter,
+              onSelected: (String label) => setState(() => _filter = label),
+            ),
+            const SizedBox(height: 16),
+            if (visible.isEmpty)
+              EmptyStateCard(
+                icon: PhosphorCode.heart,
+                message: saved.isEmpty
                     ? 'Belum ada barang favorite.'
                     : 'Belum ada barang di filter ini.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: KosplyColors.textSecondaryOf(context),
-                ),
-              ),
-            )
-          else
-            ProductGrid(items: visible),
-        ],
+              )
+            else
+              ProductGrid(items: visible),
+          ],
+        ),
       ),
     );
   }

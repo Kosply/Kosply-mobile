@@ -1,11 +1,10 @@
 /// @title Favorites provider
 /// @notice Holds product ids saved from the product-detail heart.
 /// @dev Backed by the Drift cache; the in-memory set follows the
-/// {favoriteIdsProvider} stream and toggles write through the repository.
+/// {favoriteIdsProvider} stream and toggles write through the repository,
+/// which flips the heart at once and confirms it with `/api/favorites`.
 /// @author Kosply-mobile
 library;
-
-import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,10 +26,12 @@ class FavoritesNotifier extends Notifier<Set<String>> {
   bool contains(String productId) => state.contains(productId);
 
   /// @notice Adds [productId] when missing, removes it when already saved.
+  /// @dev Throws {ApiException} when the server refused; the heart has
+  /// already been flipped back by then.
   /// @param productId Catalogue item id.
-  /// @return void
-  void toggle(String productId) {
-    unawaited(ref.read(catalogRepositoryProvider).toggleFavorite(productId));
+  /// @return Future completing when the server agreed.
+  Future<void> toggle(String productId) {
+    return ref.read(catalogRepositoryProvider).toggleFavorite(productId);
   }
 }
 

@@ -43,6 +43,24 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
 
 # Widget Preview related
 .widget_preview/
+
+# Local configuration. Copy .env.example to .env before flutter run.
+# The real file holds the LAN API URL and is bundled as an asset.
+.env
+.env.*
+!.env.example
+*.env
+
+# Signing material and platform credential files
+**/key.properties
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pem
+**/*.key
+**/google-services.json
+**/GoogleService-Info.plist

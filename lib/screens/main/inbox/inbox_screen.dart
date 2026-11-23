@@ -8,8 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/chat/conversation.dart';
 import '../../../providers/inbox/inbox_providers.dart';
+import '../../../core/ui_bridge/ui_bridge_scope.dart';
 import '../../../theme/colors/kosply_colors.dart';
+import '../../../widgets/common/empty/empty_state_card.dart';
 import '../../../widgets/common/filters/filter_chip_bar.dart';
+import '../../../widgets/common/icons/phosphor_icons.dart';
 import '../../../widgets/common/search/searchbar.dart';
 import '../../../widgets/seller/identity/seller_avatar.dart';
 import 'chat_detail_screen.dart';
@@ -70,48 +73,45 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
   /// @return The screen widget.
   @override
   Widget build(BuildContext context) {
+    ref.watch(inboxSyncProvider);
     final List<Conversation> all =
         ref.watch(inboxConversationsProvider).value ?? const <Conversation>[];
     final List<Conversation> items = _visible(all);
 
     return Scaffold(
       backgroundColor: KosplyColors.backgroundOf(context),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          KosplySearchbar(
-            key: const Key('inbox-username-search'),
-            hint: 'Cari username...',
-            showFilter: false,
-            onChanged: (String value) {
-              setState(() => _query = value);
-            },
-          ),
-          const SizedBox(height: 12),
-          FilterChipBar(
-            labels: InboxScreen.categories,
-            selected: _category,
-            onSelected: (String label) {
-              setState(() => _category = label);
-            },
-          ),
-          const SizedBox(height: 16),
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                'Tidak ada percakapan.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: KosplyColors.textSecondaryOf(context),
-                ),
-              ),
-            )
-          else
-            for (final Conversation item in items)
-              _ConversationTile(item: item),
-        ],
+      body: UiBridgeScope(
+        screen: 'inbox',
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+          children: [
+            KosplySearchbar(
+              key: const Key('inbox-username-search'),
+              hint: 'Cari username...',
+              showFilter: false,
+              onChanged: (String value) {
+                setState(() => _query = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            FilterChipBar(
+              labels: InboxScreen.categories,
+              selected: _category,
+              onSelected: (String label) {
+                setState(() => _category = label);
+              },
+            ),
+            const SizedBox(height: 16),
+            if (items.isEmpty)
+              const EmptyStateCard(
+                icon: PhosphorCode.chats,
+                message: 'Tidak ada percakapan.',
+              )
+            else
+              for (final Conversation item in items)
+                _ConversationTile(item: item),
+          ],
+        ),
       ),
     );
   }

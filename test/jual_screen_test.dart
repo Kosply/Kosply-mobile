@@ -7,14 +7,17 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kosply_mobile/core/camera/providers/camera_provider.dart';
 import 'package:kosply_mobile/models/account/account_mode.dart';
 import 'package:kosply_mobile/providers/account/account_mode_provider.dart';
 import 'package:kosply_mobile/screens/seller/product/add_product_screen.dart';
+import 'package:kosply_mobile/screens/seller/product/product_camera_screen.dart';
 import 'package:kosply_mobile/screens/seller/analytic/analytic_screen.dart';
 import 'package:kosply_mobile/screens/main/jual/jual_screen.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 import 'package:kosply_mobile/widgets/seller/identity/seller_identity.dart';
 
+import 'helpers/fake_listing_camera.dart';
 import 'helpers/kosply_test_app.dart';
 
 /// @notice Jual dashboard behaviour checks.
@@ -29,9 +32,15 @@ void main() {
       tester,
       const JualScreen(),
       routes: <String, WidgetBuilder>{
+        ProductCameraScreen.routeName: (_) => const ProductCameraScreen(),
         AddProductScreen.routeName: (_) => const AddProductScreen(),
         AnalyticScreen.routeName: (_) => const AnalyticScreen(),
       },
+      container: await seededContainer(
+        overrides: [
+          listingCameraFactoryProvider.overrideWithValue(FakeListingCamera.new),
+        ],
+      ),
     );
   }
 
@@ -49,14 +58,16 @@ void main() {
     await pumpJual(tester);
 
     expect(find.byType(SellerIdentity), findsOneWidget);
-    expect(find.text('seller1'), findsOneWidget);
-    expect(find.textContaining('Lorem ipsum dolor sit amet'), findsOneWidget);
+    expect(find.text('Kamu'), findsOneWidget);
+    expect(find.textContaining('Lagi beres-beres kos'), findsOneWidget);
     expect(find.text('Cari barang jualan...'), findsOneWidget);
     expect(find.byKey(const Key('jual-analytic')), findsNothing);
     expect(find.byKey(const Key('jual-add')), findsOneWidget);
     expect(find.text('Semua'), findsOneWidget);
-    expect(find.byType(ProductGrid), findsOneWidget);
-    expect(find.text('Meja belajar lipat'), findsOneWidget);
+    // This student has not published a listing, so the shelf stays empty.
+    expect(find.text('Belum ada barang di filter ini.'), findsOneWidget);
+    expect(find.byType(ProductGrid), findsNothing);
+    expect(find.text('Meja belajar lipat'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -68,7 +79,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('jual-search')), 'Meja');
     await tester.pump();
 
-    expect(find.text('Meja belajar lipat'), findsOneWidget);
+    // The signed-in shelf is empty; other sellers' listings stay off it.
+    expect(find.text('Meja belajar lipat'), findsNothing);
     expect(find.text('Lampu belajar LED'), findsNothing);
   });
 
@@ -83,10 +95,14 @@ void main() {
 
     expect(find.byType(AnalyticScreen), findsOneWidget);
     expect(find.text('Views'), findsOneWidget);
-    expect(find.text('Trading product kamu'), findsOneWidget);
+    expect(find.text('Semua product kamu'), findsOneWidget);
+    expect(find.byKey(const Key('analytic-empty-shelf')), findsOneWidget);
+    expect(find.text('Trading product kamu'), findsNothing);
   });
 
-  testWidgets('plus button opens add product', (WidgetTester tester) async {
+  testWidgets('plus button opens the product form and back returns', (
+    WidgetTester tester,
+  ) async {
     await pumpJual(tester);
 
     await tester.tap(find.byKey(const Key('jual-add')));
@@ -94,10 +110,13 @@ void main() {
 
     expect(find.byType(AddProductScreen), findsOneWidget);
     expect(find.text('Tambah barang'), findsOneWidget);
-    expect(find.text('Nama barang'), findsOneWidget);
-    expect(find.text('Deskripsi'), findsOneWidget);
-    expect(find.text('Kategori'), findsOneWidget);
-    expect(find.text('Pasang barang'), findsOneWidget);
+    expect(find.byType(ProductCameraScreen), findsNothing);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const Key('add-product-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddProductScreen), findsNothing);
+    expect(find.byType(JualScreen), findsOneWidget);
   });
 }

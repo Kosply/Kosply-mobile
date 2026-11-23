@@ -2189,6 +2189,18 @@ class $ConversationsTable extends Conversations
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _unreadCountMeta = const VerificationMeta(
+    'unreadCount',
+  );
+  @override
+  late final GeneratedColumn<int> unreadCount = GeneratedColumn<int>(
+    'unread_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     updatedAt,
@@ -2203,6 +2215,7 @@ class $ConversationsTable extends Conversations
     lastMessageAt,
     createdAt,
     backendUpdatedAt,
+    unreadCount,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2305,6 +2318,15 @@ class $ConversationsTable extends Conversations
         ),
       );
     }
+    if (data.containsKey('unread_count')) {
+      context.handle(
+        _unreadCountMeta,
+        unreadCount.isAcceptableOrUnknown(
+          data['unread_count']!,
+          _unreadCountMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2362,6 +2384,10 @@ class $ConversationsTable extends Conversations
         DriftSqlType.int,
         data['${effectivePrefix}backend_updated_at'],
       )!,
+      unreadCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}unread_count'],
+      )!,
     );
   }
 
@@ -2407,6 +2433,11 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
 
   /// @dev UTC millis of the last backend update to the row.
   final int backendUpdatedAt;
+
+  /// @dev The signed-in student's unread count from the backend inbox.
+  /// @dev Stored rather than counted from cached bubbles: the inbox only
+  /// downloads each room's newest message, not the whole thread.
+  final int unreadCount;
   const ConversationRow({
     required this.updatedAt,
     required this.lastFetched,
@@ -2420,6 +2451,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     required this.lastMessageAt,
     required this.createdAt,
     required this.backendUpdatedAt,
+    required this.unreadCount,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2436,6 +2468,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     map['last_message_at'] = Variable<int>(lastMessageAt);
     map['created_at'] = Variable<int>(createdAt);
     map['backend_updated_at'] = Variable<int>(backendUpdatedAt);
+    map['unread_count'] = Variable<int>(unreadCount);
     return map;
   }
 
@@ -2453,6 +2486,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       lastMessageAt: Value(lastMessageAt),
       createdAt: Value(createdAt),
       backendUpdatedAt: Value(backendUpdatedAt),
+      unreadCount: Value(unreadCount),
     );
   }
 
@@ -2476,6 +2510,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       lastMessageAt: serializer.fromJson<int>(json['lastMessageAt']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       backendUpdatedAt: serializer.fromJson<int>(json['backendUpdatedAt']),
+      unreadCount: serializer.fromJson<int>(json['unreadCount']),
     );
   }
   @override
@@ -2494,6 +2529,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       'lastMessageAt': serializer.toJson<int>(lastMessageAt),
       'createdAt': serializer.toJson<int>(createdAt),
       'backendUpdatedAt': serializer.toJson<int>(backendUpdatedAt),
+      'unreadCount': serializer.toJson<int>(unreadCount),
     };
   }
 
@@ -2510,6 +2546,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     int? lastMessageAt,
     int? createdAt,
     int? backendUpdatedAt,
+    int? unreadCount,
   }) => ConversationRow(
     updatedAt: updatedAt ?? this.updatedAt,
     lastFetched: lastFetched ?? this.lastFetched,
@@ -2523,6 +2560,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
     createdAt: createdAt ?? this.createdAt,
     backendUpdatedAt: backendUpdatedAt ?? this.backendUpdatedAt,
+    unreadCount: unreadCount ?? this.unreadCount,
   );
   ConversationRow copyWithCompanion(ConversationsCompanion data) {
     return ConversationRow(
@@ -2550,6 +2588,9 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
       backendUpdatedAt: data.backendUpdatedAt.present
           ? data.backendUpdatedAt.value
           : this.backendUpdatedAt,
+      unreadCount: data.unreadCount.present
+          ? data.unreadCount.value
+          : this.unreadCount,
     );
   }
 
@@ -2567,7 +2608,8 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
           ..write('agreedLocationLabel: $agreedLocationLabel, ')
           ..write('lastMessageAt: $lastMessageAt, ')
           ..write('createdAt: $createdAt, ')
-          ..write('backendUpdatedAt: $backendUpdatedAt')
+          ..write('backendUpdatedAt: $backendUpdatedAt, ')
+          ..write('unreadCount: $unreadCount')
           ..write(')'))
         .toString();
   }
@@ -2586,6 +2628,7 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
     lastMessageAt,
     createdAt,
     backendUpdatedAt,
+    unreadCount,
   );
   @override
   bool operator ==(Object other) =>
@@ -2602,7 +2645,8 @@ class ConversationRow extends DataClass implements Insertable<ConversationRow> {
           other.agreedLocationLabel == this.agreedLocationLabel &&
           other.lastMessageAt == this.lastMessageAt &&
           other.createdAt == this.createdAt &&
-          other.backendUpdatedAt == this.backendUpdatedAt);
+          other.backendUpdatedAt == this.backendUpdatedAt &&
+          other.unreadCount == this.unreadCount);
 }
 
 class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
@@ -2618,6 +2662,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
   final Value<int> lastMessageAt;
   final Value<int> createdAt;
   final Value<int> backendUpdatedAt;
+  final Value<int> unreadCount;
   final Value<int> rowid;
   const ConversationsCompanion({
     this.updatedAt = const Value.absent(),
@@ -2632,6 +2677,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     this.lastMessageAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.backendUpdatedAt = const Value.absent(),
+    this.unreadCount = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ConversationsCompanion.insert({
@@ -2647,6 +2693,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     this.lastMessageAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.backendUpdatedAt = const Value.absent(),
+    this.unreadCount = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id);
   static Insertable<ConversationRow> custom({
@@ -2662,6 +2709,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     Expression<int>? lastMessageAt,
     Expression<int>? createdAt,
     Expression<int>? backendUpdatedAt,
+    Expression<int>? unreadCount,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2678,6 +2726,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
       if (lastMessageAt != null) 'last_message_at': lastMessageAt,
       if (createdAt != null) 'created_at': createdAt,
       if (backendUpdatedAt != null) 'backend_updated_at': backendUpdatedAt,
+      if (unreadCount != null) 'unread_count': unreadCount,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2695,6 +2744,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     Value<int>? lastMessageAt,
     Value<int>? createdAt,
     Value<int>? backendUpdatedAt,
+    Value<int>? unreadCount,
     Value<int>? rowid,
   }) {
     return ConversationsCompanion(
@@ -2710,6 +2760,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       createdAt: createdAt ?? this.createdAt,
       backendUpdatedAt: backendUpdatedAt ?? this.backendUpdatedAt,
+      unreadCount: unreadCount ?? this.unreadCount,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2755,6 +2806,9 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
     if (backendUpdatedAt.present) {
       map['backend_updated_at'] = Variable<int>(backendUpdatedAt.value);
     }
+    if (unreadCount.present) {
+      map['unread_count'] = Variable<int>(unreadCount.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2776,6 +2830,7 @@ class ConversationsCompanion extends UpdateCompanion<ConversationRow> {
           ..write('lastMessageAt: $lastMessageAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('backendUpdatedAt: $backendUpdatedAt, ')
+          ..write('unreadCount: $unreadCount, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7588,6 +7643,7 @@ typedef $$ConversationsTableCreateCompanionBuilder =
       Value<int> lastMessageAt,
       Value<int> createdAt,
       Value<int> backendUpdatedAt,
+      Value<int> unreadCount,
       Value<int> rowid,
     });
 typedef $$ConversationsTableUpdateCompanionBuilder =
@@ -7604,6 +7660,7 @@ typedef $$ConversationsTableUpdateCompanionBuilder =
       Value<int> lastMessageAt,
       Value<int> createdAt,
       Value<int> backendUpdatedAt,
+      Value<int> unreadCount,
       Value<int> rowid,
     });
 
@@ -7673,6 +7730,11 @@ class $$ConversationsTableFilterComposer
 
   ColumnFilters<int> get backendUpdatedAt => $composableBuilder(
     column: $table.backendUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get unreadCount => $composableBuilder(
+    column: $table.unreadCount,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -7745,6 +7807,11 @@ class $$ConversationsTableOrderingComposer
     column: $table.backendUpdatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get unreadCount => $composableBuilder(
+    column: $table.unreadCount,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ConversationsTableAnnotationComposer
@@ -7803,6 +7870,11 @@ class $$ConversationsTableAnnotationComposer
     column: $table.backendUpdatedAt,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get unreadCount => $composableBuilder(
+    column: $table.unreadCount,
+    builder: (column) => column,
+  );
 }
 
 class $$ConversationsTableTableManager
@@ -7848,6 +7920,7 @@ class $$ConversationsTableTableManager
                 Value<int> lastMessageAt = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> backendUpdatedAt = const Value.absent(),
+                Value<int> unreadCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ConversationsCompanion(
                 updatedAt: updatedAt,
@@ -7862,6 +7935,7 @@ class $$ConversationsTableTableManager
                 lastMessageAt: lastMessageAt,
                 createdAt: createdAt,
                 backendUpdatedAt: backendUpdatedAt,
+                unreadCount: unreadCount,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -7878,6 +7952,7 @@ class $$ConversationsTableTableManager
                 Value<int> lastMessageAt = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> backendUpdatedAt = const Value.absent(),
+                Value<int> unreadCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ConversationsCompanion.insert(
                 updatedAt: updatedAt,
@@ -7892,6 +7967,7 @@ class $$ConversationsTableTableManager
                 lastMessageAt: lastMessageAt,
                 createdAt: createdAt,
                 backendUpdatedAt: backendUpdatedAt,
+                unreadCount: unreadCount,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

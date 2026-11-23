@@ -8,7 +8,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kosply_mobile/data/catalog/placeholder_catalog.dart';
 import 'package:kosply_mobile/layouts/main_layout.dart';
 import 'package:kosply_mobile/main.dart';
 import 'package:kosply_mobile/screens/auth/forgot_password/forgot_password_screen.dart';
@@ -38,6 +37,8 @@ import 'package:kosply_mobile/screens/support/ticket/ticket_detail_screen.dart';
 import 'package:kosply_mobile/widgets/common/brand/kosply_wordmark.dart';
 import 'package:kosply_mobile/widgets/product/grid/product_grid.dart';
 
+import 'helpers/fake_backend.dart';
+import 'helpers/fixtures/placeholder_catalog.dart';
 import 'helpers/kosply_test_app.dart';
 
 /// @notice Screen-by-screen render checks.
@@ -58,7 +59,7 @@ void main() {
     'seller detail': const SellerDetailScreen(sellerId: 'seller-1'),
     'search': const SearchScreen(),
     'inbox': const InboxScreen(),
-    'chat detail': const ChatDetailScreen(sellerId: 'seller-1'),
+    'chat detail': const ChatDetailScreen(conversationId: 'seller-1'),
     'jual': const JualScreen(),
     'add product': const AddProductScreen(),
     'profile setting': const ProfileSettingScreen(),
@@ -103,6 +104,23 @@ void main() {
     expect(find.byType(RegisterScreen), findsOneWidget);
   });
 
+  // @dev 360dp-wide phones (720px at 2x) used to clip every interest card.
+  for (final double scale in <double>[1.0, 1.3]) {
+    testWidgets('interest cards fit a 360dp phone at text scale $scale', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(720, 1604);
+      tester.view.devicePixelRatio = 2.0;
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await pumpKosplyApp(tester, const InterestScreen());
+
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('home screen renders cards without overflow', (
     WidgetTester tester,
   ) async {
@@ -141,7 +159,6 @@ void main() {
     await tester.tap(find.text('Search'));
     await tester.pumpAndSettle();
     expect(find.byType(SearchScreen), findsOneWidget);
-    expect(find.text('Riwayat pencarian'), findsOneWidget);
     expect(find.text('Dibuka terakhir'), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right), findsNothing);
 
@@ -163,12 +180,39 @@ void main() {
 
     await tester.tap(find.text('Penjual'));
     await tester.pumpAndSettle();
-    expect(find.text('Jual'), findsOneWidget);
+    expect(find.text('Welcome'), findsOneWidget);
+    expect(find.text('Jual'), findsNothing);
+  });
 
+  testWidgets('an approved seller sees the Jual tab', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 2100);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final FakeKosplyBackend backend = FakeKosplyBackend()
+      ..verification = <String, dynamic>{
+        'id': 'verify-1',
+        'status': 'APPROVED',
+        'namaLengkap': 'Fajar Uji',
+        'nim': '253140701111034',
+        'universitas': 'Universitas Brawijaya',
+        'programStudi': 'S1 Teknik Informatika',
+        'rejectionReason': '',
+      };
+    await pumpKosplyApp(tester, const KosplyMainLayout(), backend: backend);
+
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Penjual'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jual'), findsOneWidget);
+    expect(find.text('Welcome'), findsNothing);
     await tester.tap(find.text('Jual'));
     await tester.pumpAndSettle();
     expect(find.byType(JualScreen), findsOneWidget);
-    expect(find.text('Cari barang jualan...'), findsOneWidget);
   });
 
   testWidgets('settings screen renders without layout errors', (

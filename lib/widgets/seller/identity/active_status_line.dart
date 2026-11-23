@@ -1,53 +1,58 @@
 /// @title ActiveStatusLine
-/// @notice Clock icon plus last-active label under a username.
+/// @notice Green presence dot plus an activity label under a username.
+/// @dev An empty label still reads "Aktif". This is not a menu.
 /// @author Kosply-mobile
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../theme/colors/kosply_colors.dart';
-import '../../common/icons/phosphor_icons.dart';
 
 /// @title ActiveStatusLine
 /// @notice Compact activity row used on chat and seller identity.
 class ActiveStatusLine extends StatelessWidget {
   /// @notice Creates the activity row.
-  /// @param label Relative activity copy, e.g. "aktif 5 menit lalu".
-  /// @param iconSize Clock size in logical pixels.
+  /// @param label Relative activity copy, e.g. "aktif 5 menit lalu". Empty
+  /// shows "Aktif".
+  /// @param iconSize Dot diameter in logical pixels.
   /// @param fontSize Label size in logical pixels.
   /// @return A new {ActiveStatusLine} instance.
   const ActiveStatusLine({
     required this.label,
-    this.iconSize = 14,
+    this.iconSize = 8,
     this.fontSize = 12,
     super.key,
   });
 
-  /// @dev Relative activity copy.
+  /// @dev Relative activity copy. Empty means the person is simply active.
   final String label;
 
-  /// @dev Clock size in logical pixels.
+  /// @dev Dot diameter in logical pixels.
   final double iconSize;
 
   /// @dev Label size in logical pixels.
   final double fontSize;
 
-  /// @notice Builds the green clock and label.
+  /// @notice Builds the green dot and label.
   /// @param context The build context.
   /// @return The activity row.
   @override
   Widget build(BuildContext context) {
+    final String text = label.trim().isEmpty ? 'Aktif' : label.trim();
     return Row(
       children: [
-        PhosphorGlyph(
-          PhosphorCode.clock,
-          size: iconSize,
-          color: KosplyColors.active,
+        Container(
+          width: iconSize,
+          height: iconSize,
+          decoration: const BoxDecoration(
+            color: KosplyColors.active,
+            shape: BoxShape.circle,
+          ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         Flexible(
           child: Text(
-            label,
+            text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
